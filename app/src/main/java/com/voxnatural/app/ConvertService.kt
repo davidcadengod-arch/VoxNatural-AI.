@@ -26,6 +26,8 @@ class ConvertService:Service(){
   lock=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"VoxNatural:convert").apply{acquire(6*60*60*1000L)}
   val folder=File(filesDir,"library/"+id)
   report("Iniciando motor local")
+  val sid=i?.getIntExtra("sid",-1)?:-1
+  if(sid>=0){Thread{convertNeural(folder,sid)}.start();return START_NOT_STICKY}
   tts=TextToSpeech(this){status->
    if(status!=TextToSpeech.SUCCESS){report("Motor no disponible");stopSelf()}
    else Thread{convert(folder)}.start()
@@ -72,6 +74,35 @@ class ConvertService:Service(){
    parts.deleteRecursively()
    report("Conversión completada")
   }catch(e:Exception){report("Error: "+e.message)}
+  finally{stopSelf()}
+ }
+ private fun convertNeural(folder:File,sid:Int){
+  try{
+   val text=File(folder,"text").readText()
+   val chunks=mutableListOf<String>()
+   var pos=0
+   while(pos<text.length){
+    var end=minOf(pos+200,text.length)
+    if(end<text.length){val cut=text.lastIndexOfAny(charArrayOf(' ','\n'),end);if(cut>pos)end=cut+1}
+    if(end<text.length && Character.isHighSurrogate(text[end-1]))end--
+    val part=text.substring(pos,end).trim();if(part.isNotEmpty())chunks.add(part);pos=end
+   }
+   require(chunks.isNotEmpty())
+   val parts=File(folder,"neural-parts-"+sid).apply{mkdirs()}
+   NeuralVoice(this,sid).use{voice->
+    for((index,chunk) in chunks.withIndex()){
+     report("Kokoro: "+(index+1)+" de "+chunks.size)
+     val f=File(parts,index.toString()+".wav")
+     val done=File(parts,index.toString()+".done")
+     if(done.isFile && f.length()>44)continue
+     done.delete();f.delete()
+     voice.generate(chunk,f)
+     require(f.length()>44);done.writeText("ok")
+    }
+   }
+   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
+   parts.deleteRecursively();report("Conversión neuronal completada")
+  }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
  private fun merge(files:List<File>,out:File){
