@@ -38,7 +38,7 @@ class MainActivity : Activity() {
   voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android")) }
   root.addView(voice)
   status=label(root,"Selecciona un documento",16)
-  button(root,"Convertir a WAV") {
+  button(root,"Convertir a audio") {
    val f=selected
    if(f==null) toast("Primero selecciona un documento")
    else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,100,-1)[voice.selectedItemPosition]))
@@ -53,14 +53,15 @@ class MainActivity : Activity() {
  private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
  override fun onResume(){ super.onResume(); refresh.post(tick) }
  override fun onPause(){ refresh.removeCallbacks(tick); super.onPause() }
- private fun showStatus(){ status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(selected?.let { File(it,"audio.wav").exists() }==true && library.tag!=selected?.name) render() }
+ private fun showStatus(){ status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(library.tag!=libraryState()) render() }
+ private fun libraryState()=docs.listFiles()?.sortedBy{it.name}?.joinToString("|"){ it.name+":"+File(it,"audio.wav").lastModified()+":"+File(it,"audio.mp3").lastModified() } ?: ""
  private fun render(){
   library.removeAllViews()
   docs.listFiles()?.filter { File(it,"name").isFile }?.sortedByDescending { it.lastModified() }?.forEach { f ->
    button(library,(if(selected==f) "✓ " else "")+File(f,"name").readText()){ selected=f; render(); showStatus() }
-   if(File(f,"audio.wav").exists()) button(library,"Guardar WAV") { exportFile=File(f,"audio.wav"); startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { type="audio/wav"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+".wav") },11) }
+   for(ext in listOf("mp3","wav")) if(File(f,"audio."+ext).isFile) button(library,"Guardar "+ext.uppercase()) { exportFile=File(f,"audio."+ext); startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { type=if(ext=="mp3")"audio/mpeg" else "audio/wav"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+"."+ext) },11) }
   }
-  library.tag=if(selected?.let { File(it,"audio.wav").exists() }==true) selected?.name else null
+  library.tag=libraryState()
  }
  override fun onActivityResult(request:Int,result:Int,data:Intent?){
   super.onActivityResult(request,result,data)
