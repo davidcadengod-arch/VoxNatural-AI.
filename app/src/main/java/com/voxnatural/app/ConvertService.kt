@@ -34,6 +34,12 @@ class ConvertService:Service(){
   }
   return START_NOT_STICKY
  }
+ private fun finishAudio(folder:File){
+  val wav=File(folder,"audio.wav"); val mp3=File(folder,"audio.mp3")
+  mp3.delete()
+  report("Codificando MP3")
+  try{Mp3Encoder.encode(wav,mp3);report("Conversión completada · MP3 y WAV")}catch(e:Throwable){report("WAV listo; MP3 no disponible: "+e.message)}
+ }
  private fun convert(folder:File){
   try{
    val engine=tts?:error("Motor no disponible")
@@ -72,7 +78,7 @@ class ConvertService:Service(){
    }
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
    parts.deleteRecursively()
-   report("Conversión completada")
+   finishAudio(folder)
   }catch(e:Exception){report("Error: "+e.message)}
   finally{stopSelf()}
  }
@@ -83,7 +89,7 @@ class ConvertService:Service(){
    var pos=0
    while(pos<text.length){
     var end=minOf(pos+200,text.length)
-    if(end<text.length){val cut=text.lastIndexOfAny(charArrayOf(' ','\n'),end);if(cut>pos)end=cut+1}
+    if(end<text.length){val sentence=text.lastIndexOfAny(charArrayOf('.','!','?','\n'),end-1);val cut=text.lastIndexOfAny(charArrayOf(' ','\n'),end-1);if(sentence>pos+60)end=sentence+1 else if(cut>pos)end=cut+1}
     if(end<text.length && Character.isHighSurrogate(text[end-1]))end--
     val part=text.substring(pos,end).trim();if(part.isNotEmpty())chunks.add(part);pos=end
    }
@@ -101,7 +107,7 @@ class ConvertService:Service(){
     }
    }
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
-   parts.deleteRecursively();report("Conversión neuronal completada")
+   parts.deleteRecursively();finishAudio(folder)
   }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
