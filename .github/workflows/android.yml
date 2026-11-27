@@ -17,6 +17,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Fetch pinned neural runtime and model
+        run: |
+          mkdir -p app/libs app/src/main/assets/kokoro
+          curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar -o app/libs/sherpa.aar
+          curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2 -o /tmp/kokoro.tar.bz2
+          tar -xjf /tmp/kokoro.tar.bz2 -C /tmp
+          cp /tmp/kokoro-multi-lang-v1_0/{model.onnx,voices.bin,tokens.txt} app/src/main/assets/kokoro/
+          cp -r /tmp/kokoro-multi-lang-v1_0/espeak-ng-data app/src/main/assets/kokoro/
       - run: gradle :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
