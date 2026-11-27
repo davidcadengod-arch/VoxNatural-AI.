@@ -91,7 +91,7 @@ class ConvertService:Service(){
    val parts=File(folder,"neural-parts-"+sid).apply{mkdirs()}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
-     report("Kokoro: "+(index+1)+" de "+chunks.size)
+     report((if(sid==100)"Piper: " else "Kokoro: ")+(index+1)+" de "+chunks.size)
      val f=File(parts,index.toString()+".wav")
      val done=File(parts,index.toString()+".done")
      if(done.isFile && f.length()>44)continue
