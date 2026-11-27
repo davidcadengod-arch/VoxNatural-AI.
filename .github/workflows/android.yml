@@ -32,7 +32,13 @@ jobs:
           cp "$P/es_ES-davefx-medium.onnx" app/src/main/assets/piper/model.onnx
           cp "$P/tokens.txt" app/src/main/assets/piper/
           cp -r "$P/espeak-ng-data" app/src/main/assets/piper/
+      - name: Compile native MP3 encoder
+        run: bash scripts/build-mp3.sh
       - run: gradle :app:assembleDebug --no-daemon
+      - name: Verify APK
+        run: |
+          unzip -t app/build/outputs/apk/debug/app-debug.apk >/dev/null
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep libvoxmp3.so
       - uses: actions/upload-artifact@v4
         with:
           name: VoxNatural-Android-alpha
