@@ -35,13 +35,13 @@ class MainActivity : Activity() {
   button(root,"Importar PDF, Word o TXT") {
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain")) },10)
   }
-  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Español · motor local de Android")) }
+  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","Español · motor local de Android")) }
   root.addView(voice)
   status=label(root,"Selecciona un documento",16)
   button(root,"Convertir a WAV") {
    val f=selected
    if(f==null) toast("Primero selecciona un documento")
-   else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name))
+   else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,-1)[voice.selectedItemPosition]))
   }
   label(root,"Mi biblioteca",23)
   library=LinearLayout(this).apply { orientation=1 }; root.addView(library)
