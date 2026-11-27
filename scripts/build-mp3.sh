@@ -3,7 +3,24 @@ set -euo pipefail
 ROOT="$PWD"
 SDK="${ANDROID_HOME:?ANDROID_HOME required}"
 NDK="$SDK/ndk/27.2.12479018"
-if [ ! -d "$NDK" ]; then sdkmanager "ndk;27.2.12479018"; fi
+if [ ! -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" ]; then
+  # Do not depend on sdkmanager being available on PATH.
+  SDKMANAGER="$(command -v sdkmanager || true)"
+  if [ -z "$SDKMANAGER" ]; then
+    SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+  fi
+  if [ -n "$SDKMANAGER" ]; then
+    "$SDKMANAGER" --sdk_root="$SDK" "ndk;27.2.12479018"
+  else
+    NDK_TMP="$(mktemp -d)"
+    curl -fL --retry 3 https://dl.google.com/android/repository/android-ndk-r27c-linux.zip -o "$NDK_TMP/ndk.zip"
+    unzip -q "$NDK_TMP/ndk.zip" -d "$NDK_TMP"
+    mkdir -p "$SDK/ndk"
+    if [ -d "$NDK" ]; then mv "$NDK" "$NDK_TMP/previous-ndk"; fi
+    mv "$NDK_TMP/android-ndk-r27c" "$NDK"
+    rm -rf "$NDK_TMP"
+  fi
+fi
 TOOL="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
