@@ -6,8 +6,9 @@ android {
   applicationId = "com.voxnatural.app"
   minSdk = 26
   targetSdk = 35
-  versionCode = 1
-  versionName = "3.0-alpha"
+  versionCode = 2
+  versionName = "3.0-beta1"
+  ndk { abiFilters += "arm64-v8a" }
  }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
