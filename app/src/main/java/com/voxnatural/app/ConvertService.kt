@@ -48,9 +48,16 @@ class ConvertService:Service(){
     chunks.add(text.substring(pos,end));pos=end
    }
    val parts=File(folder,"parts").apply{mkdirs()}
+   val signature=File(parts,"signature")
+   val key=v.name+"|"+text.hashCode()+"|"+limit
+   if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
    for((index,chunk) in chunks.withIndex()){
     report("Fragmento "+(index+1)+" de "+chunks.size)
     val file=File(parts,index.toString()+".wav")
+    val completed=File(parts,index.toString()+".done")
+    if(completed.isFile && file.length()>44)continue
+    completed.delete()
+    file.delete()
     val latch=CountDownLatch(1);var ok=false
     engine.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
      override fun onStart(id:String?){}
@@ -58,7 +65,8 @@ class ConvertService:Service(){
      override fun onError(id:String?){latch.countDown()}
     })
     require(engine.synthesizeToFile(chunk,Bundle(),file,index.toString())==TextToSpeech.SUCCESS){"No se pudo iniciar síntesis"}
-    require(latch.await(10,TimeUnit.MINUTES)&&ok){"Error de síntesis"}
+    require(latch.await(10,TimeUnit.MINUTES)&&ok && file.length()>44){"Error de síntesis"}
+    completed.writeText("ok")
    }
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
    parts.deleteRecursively()
