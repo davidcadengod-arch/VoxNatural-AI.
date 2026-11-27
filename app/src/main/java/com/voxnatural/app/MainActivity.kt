@@ -54,12 +54,26 @@ class MainActivity : Activity() {
  override fun onResume(){ super.onResume(); refresh.post(tick) }
  override fun onPause(){ refresh.removeCallbacks(tick); super.onPause() }
  private fun showStatus(){ status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(library.tag!=libraryState()) render() }
- private fun libraryState()=docs.listFiles()?.sortedBy{it.name}?.joinToString("|"){ it.name+":"+File(it,"audio.wav").lastModified()+":"+File(it,"audio.mp3").lastModified() } ?: ""
+ private fun libraryState()=docs.listFiles()?.sortedBy{it.name}?.joinToString("|"){ it.name+":"+(it.listFiles()?.filter{a->a.extension in listOf("wav","mp3")}?.sortedBy{a->a.name}?.joinToString(","){a->a.name+":"+a.lastModified()} ?: "") } ?: ""
  private fun render(){
   library.removeAllViews()
   docs.listFiles()?.filter { File(it,"name").isFile }?.sortedByDescending { it.lastModified() }?.forEach { f ->
    button(library,(if(selected==f) "✓ " else "")+File(f,"name").readText()){ selected=f; render(); showStatus() }
-   for(ext in listOf("mp3","wav")) if(File(f,"audio."+ext).isFile) button(library,"Guardar "+ext.uppercase()) { exportFile=File(f,"audio."+ext); startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { type=if(ext=="mp3")"audio/mpeg" else "audio/wav"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+"."+ext) },11) }
+   val voices=linkedMapOf(28 to "Dora",29 to "Alex",53 to "Santa",100 to "DaveFX",-1 to "Android")
+   for((sid,label) in voices) for(ext in listOf("mp3","wav")){
+    val audio=File(f,"audio-"+sid+"."+ext)
+    if(audio.isFile) button(library,"Guardar "+label+" · "+ext.uppercase()){
+     exportFile=audio
+     startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply{type=if(ext=="mp3")"audio/mpeg" else "audio/wav";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+"_"+label+"."+ext)},11)
+    }
+   }
+   for(ext in listOf("mp3","wav")){
+    val audio=File(f,"audio."+ext)
+    if(audio.isFile) button(library,"Guardar anterior · "+ext.uppercase()){
+     exportFile=audio
+     startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply{type=if(ext=="mp3")"audio/mpeg" else "audio/wav";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+"."+ext)},11)
+    }
+   }
   }
   library.tag=libraryState()
  }
