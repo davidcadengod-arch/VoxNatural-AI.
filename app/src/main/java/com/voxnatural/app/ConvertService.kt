@@ -34,8 +34,8 @@ class ConvertService:Service(){
   }
   return START_NOT_STICKY
  }
- private fun finishAudio(folder:File){
-  val wav=File(folder,"audio.wav"); val mp3=File(folder,"audio.mp3")
+ private fun finishAudio(folder:File,sid:Int){
+  val wav=File(folder,"audio-"+sid+".wav"); val mp3=File(folder,"audio-"+sid+".mp3")
   mp3.delete()
   report("Codificando MP3")
   try{Mp3Encoder.encode(wav,mp3);report("Conversión completada · MP3 y WAV")}catch(e:Throwable){report("WAV listo; MP3 no disponible: "+e.message)}
@@ -76,9 +76,9 @@ class ConvertService:Service(){
     require(latch.await(10,TimeUnit.MINUTES)&&ok && file.length()>44){"Error de síntesis"}
     completed.writeText("ok")
    }
-   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
+   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio--1.wav"))
    parts.deleteRecursively()
-   finishAudio(folder)
+   finishAudio(folder,-1)
   }catch(e:Exception){report("Error: "+e.message)}
   finally{stopSelf()}
  }
@@ -94,7 +94,7 @@ class ConvertService:Service(){
     val part=text.substring(pos,end).trim();if(part.isNotEmpty())chunks.add(part);pos=end
    }
    require(chunks.isNotEmpty())
-   val parts=File(folder,"neural-parts-"+sid).apply{mkdirs()}
+   val parts=File(folder,"neural-parts-"+sid+"-v2").apply{mkdirs()}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
      report((if(sid==100)"Piper: " else "Kokoro: ")+(index+1)+" de "+chunks.size)
@@ -106,8 +106,8 @@ class ConvertService:Service(){
      require(f.length()>44);done.writeText("ok")
     }
    }
-   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
-   parts.deleteRecursively();finishAudio(folder)
+   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio-"+sid+".wav"))
+   parts.deleteRecursively();finishAudio(folder,sid)
   }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
