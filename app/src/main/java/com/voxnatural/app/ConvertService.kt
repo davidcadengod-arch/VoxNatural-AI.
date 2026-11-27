@@ -1,0 +1,100 @@
+package com.voxnatural.app
+import android.app.*
+import android.content.Intent
+import android.os.*
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import java.io.*
+import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+class ConvertService:Service(){
+ private var tts:TextToSpeech?=null
+ private var busy=false
+ private var lock:PowerManager.WakeLock?=null
+ override fun onBind(i:Intent?)=null
+ private fun report(s:String){getSharedPreferences("jobs",0).edit().putString("status",s).apply()}
+ override fun onStartCommand(i:Intent?,flags:Int,startId:Int):Int{
+  if(busy)return START_NOT_STICKY
+  val id=i?.getStringExtra("id")?:return START_NOT_STICKY
+  if(!id.matches(Regex("[a-f0-9-]{36}"))){stopSelf();return START_NOT_STICKY}
+  busy=true
+  val nm=getSystemService(NotificationManager::class.java)
+  nm.createNotificationChannel(NotificationChannel("convert","Conversión de audio",NotificationManager.IMPORTANCE_LOW))
+  startForeground(1,Notification.Builder(this,"convert").setContentTitle("VoxNatural AI").setContentText("Convirtiendo documento").setSmallIcon(android.R.drawable.ic_media_play).build())
+  lock=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"VoxNatural:convert").apply{acquire(6*60*60*1000L)}
+  val folder=File(filesDir,"library/"+id)
+  report("Iniciando motor local")
+  tts=TextToSpeech(this){status->
+   if(status!=TextToSpeech.SUCCESS){report("Motor no disponible");stopSelf()}
+   else Thread{convert(folder)}.start()
+  }
+  return START_NOT_STICKY
+ }
+ private fun convert(folder:File){
+  try{
+   val engine=tts?:error("Motor no disponible")
+   val v=engine.voices.filter{it.locale.language=="es" && !it.isNetworkConnectionRequired}.maxByOrNull{it.quality}?:error("Instala una voz española sin conexión en Ajustes de síntesis de voz")
+   require(engine.setVoice(v)==TextToSpeech.SUCCESS){"No se pudo seleccionar la voz"}
+   val text=File(folder,"text").readText()
+   val chunks=mutableListOf<String>()
+   var pos=0
+   val limit=minOf(3000,TextToSpeech.getMaxSpeechInputLength())
+   while(pos<text.length){
+    var end=minOf(pos+limit,text.length)
+    if(end<text.length){val cut=text.lastIndexOf(' ',end);if(cut>pos)end=cut}
+    if(end<text.length && Character.isHighSurrogate(text[end-1]))end--
+    chunks.add(text.substring(pos,end));pos=end
+   }
+   val parts=File(folder,"parts").apply{mkdirs()}
+   for((index,chunk) in chunks.withIndex()){
+    report("Fragmento "+(index+1)+" de "+chunks.size)
+    val file=File(parts,index.toString()+".wav")
+    val latch=CountDownLatch(1);var ok=false
+    engine.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
+     override fun onStart(id:String?){}
+     override fun onDone(id:String?){ok=true;latch.countDown()}
+     override fun onError(id:String?){latch.countDown()}
+    })
+    require(engine.synthesizeToFile(chunk,Bundle(),file,index.toString())==TextToSpeech.SUCCESS){"No se pudo iniciar síntesis"}
+    require(latch.await(10,TimeUnit.MINUTES)&&ok){"Error de síntesis"}
+   }
+   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio.wav"))
+   parts.deleteRecursively()
+   report("Conversión completada")
+  }catch(e:Exception){report("Error: "+e.message)}
+  finally{stopSelf()}
+ }
+ private fun merge(files:List<File>,out:File){
+  val tmp=File(out.parentFile,"audio.tmp")
+  var format:ByteArray?=null
+  var total=0L
+  RandomAccessFile(tmp,"rw").use{dst->
+   dst.setLength(0);dst.write(ByteArray(44))
+   for(f in files)RandomAccessFile(f,"r").use{src->
+    fun tag():String{val a=ByteArray(4);src.readFully(a);return String(a,Charsets.US_ASCII)}
+    require(tag()=="RIFF");src.skipBytes(4);require(tag()=="WAVE")
+    var found=false
+    while(src.filePointer+8<=src.length()){
+     val type=tag(); val n=Integer.reverseBytes(src.readInt()).toLong() and 0xffffffffL
+     val next=src.filePointer+n+(n%2)
+     require(src.filePointer+n<=src.length())
+     if(type=="fmt "){
+      require(n>=16);val a=ByteArray(16);src.readFully(a)
+      require(a[0].toInt()==1 && a[1].toInt()==0){"Formato WAV no PCM"}
+      if(format==null)format=a else require(format!!.contentEquals(a)){"Formatos diferentes"}
+     }else if(type=="data"){
+      require(format!=null);val buf=ByteArray(65536);var left=n
+      while(left>0){val count=minOf(left,buf.size.toLong()).toInt();src.readFully(buf,0,count);dst.write(buf,0,count);left-=count}
+      total+=n;found=true
+     };src.seek(next)
+    };require(found)
+   }
+   require(total<=0xffffffffL-36)
+   dst.seek(0);dst.writeBytes("RIFF");dst.writeInt(Integer.reverseBytes((total+36).toInt()));dst.writeBytes("WAVEfmt ");dst.writeInt(Integer.reverseBytes(16));dst.write(format!!);dst.writeBytes("data");dst.writeInt(Integer.reverseBytes(total.toInt()))
+  }
+  require(tmp.renameTo(out)){"No se pudo guardar WAV"}
+ }
+ override fun onDestroy(){tts?.shutdown();if(lock?.isHeld==true)lock?.release();super.onDestroy()}
+}
