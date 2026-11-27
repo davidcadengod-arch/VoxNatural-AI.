@@ -2,6 +2,7 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
  namespace = "com.voxnatural.app"
  compileSdk = 35
+ androidResources { noCompress.addAll(listOf("onnx", "bin")) }
  defaultConfig {
   applicationId = "com.voxnatural.app"
   minSdk = 26
