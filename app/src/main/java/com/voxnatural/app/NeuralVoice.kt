@@ -4,6 +4,14 @@ import com.k2fsa.sherpa.onnx.*
 import java.io.File
 
 class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
+ companion object {
+  fun loadReference(context:Context):Pair<FloatArray,Int>{
+   val custom=File(context.filesDir,"pocket-reference.wav")
+   if(custom.isFile)return PocketReference.read(custom)
+   val tmp=File.createTempFile("pocket-ref-",".wav",context.cacheDir)
+   try{context.assets.open("pocket/reference.wav").use{i->tmp.outputStream().use{i.copyTo(it)}};return PocketReference.read(tmp)}finally{tmp.delete()}
+  }
+ }
  private val appContext=context.applicationContext
  private val pocket=sid==300
  private val piper=sid==100
@@ -44,7 +52,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
    text.endsWith("?") -> 0.98f
    else -> 0.97f
   }
-  val audio=if(pocket){val ref=if(referenceAudio!=null) Pair(referenceAudio,referenceSampleRate) else PocketReference.read(File(appContext.filesDir,"pocket-reference.wav").takeIf{it.isFile} ?: File(dir,"reference.wav"));tts.generateWithConfig(text,GenerationConfig(referenceAudio=ref.first,referenceSampleRate=ref.second,speed=speed,numSteps=10))} else if(supertonic) tts.generateWithConfig(text,GenerationConfig(sid=sid-200,speed=speed,numSteps=8,extra=mapOf("lang" to "es"))) else tts.generate(text,if(piper)0 else sid,speed)
+  val audio=if(pocket){val ref=if(referenceAudio!=null) Pair(referenceAudio,referenceSampleRate) else loadReference(appContext);tts.generateWithConfig(text,GenerationConfig(referenceAudio=ref.first,referenceSampleRate=ref.second,speed=speed,numSteps=10))} else if(supertonic) tts.generateWithConfig(text,GenerationConfig(sid=sid-200,speed=speed,numSteps=8,extra=mapOf("lang" to "es"))) else tts.generate(text,if(piper)0 else sid,speed)
   require(audio.samples.isNotEmpty() && audio.samples.all{it.isFinite()}){"Audio neuronal inválido"}
   // Preserve dynamics: attenuate only peaks that risk clipping, with short edge fades.
   val samples=audio.samples

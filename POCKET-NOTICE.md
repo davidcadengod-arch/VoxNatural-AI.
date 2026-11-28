@@ -1,2 +1,2 @@
-# PocketTTS Spanish staging
-Pocket TTS by Kyutai, CC BY 4.0. ONNX/int8 conversion by alejandrocordon: https://huggingface.co/alejandrocordon/hushfox-pocket-tts-es . Upstream documents runtime 2.0.1; current Android runtime requires validation. No reference voice is bundled until consent and provenance are verified. Run bash scripts/fetch-pocket-es.sh <staging-directory> to verify published SHA-256 hashes. This is not an enabled Android engine yet.
+# PocketTTS Spanish
+Pocket TTS by Kyutai; ONNX/int8 conversion: https://huggingface.co/alejandrocordon/hushfox-pocket-tts-es . Model license and reference attribution are bundled by scripts/fetch-pocket-es.sh. Alex is a synthetic reference; custom authorized WAV references override it. Linux synthesis passed; Android hardware testing is pending. Reference licensing must be independently reviewed before public distribution.

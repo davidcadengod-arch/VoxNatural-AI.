@@ -56,6 +56,10 @@ jobs:
             unzip -p "$APK" "$f" > /tmp/verify-model
             test -s /tmp/verify-model
           done
+          for f in lm_flow.int8.onnx lm_main.int8.onnx encoder.onnx decoder.int8.onnx text_conditioner.onnx vocab.json token_scores.json reference.wav VOICE-NOTICE.txt LICENSE; do
+            unzip -p "$APK" "assets/pocket/$f" > /tmp/verify-model
+            test -s /tmp/verify-model
+          done
           rm -f /tmp/verify-model
       - uses: actions/upload-artifact@v4
         with:

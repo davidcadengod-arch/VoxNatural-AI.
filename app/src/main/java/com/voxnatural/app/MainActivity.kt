@@ -202,7 +202,7 @@ class MainActivity : Activity() {
   button(root,"Subir") {
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain")) },10)
   }
-  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1","PocketTTS · referencia propia")) }
+  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1","PocketTTS · Alex / referencia propia")) }
   root.addView(voice)
   button(root,"Importar referencia PocketTTS (WAV)"){android.app.AlertDialog.Builder(this).setTitle("Referencia autorizada").setMessage("Usa únicamente tu propia voz o una grabación con permiso explícito para síntesis. WAV PCM mono de 3 a 20 segundos.").setNegativeButton("Cancelar",null).setPositiveButton("Tengo autorización"){_,_->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("audio/*").addCategory(Intent.CATEGORY_OPENABLE),12)}.show()}
   button(root,"Comparar voces"){compareVoices()}
@@ -238,7 +238,7 @@ class MainActivity : Activity() {
    button(info,if(selected==f)"Seleccionado" else "Seleccionar"){selected=f;render();showStatus()}
    button(info,"Editar datos"){editBook(f)}
    library.addView(card)
-   val voices=linkedMapOf(28 to "Dora",29 to "Alex",53 to "Santa",100 to "DaveFX",-1 to "Android",200 to "Supertonic F1",205 to "Supertonic M1")
+   val voices=linkedMapOf(28 to "Dora",29 to "Alex",53 to "Santa",100 to "DaveFX",-1 to "Android",200 to "Supertonic F1",205 to "Supertonic M1",300 to "PocketTTS")
    for((sid,label) in voices) for(ext in listOf("mp3","wav")){
     val audio=File(f,"audio-"+sid+"."+ext)
     if(audio.isFile) button(library,"Escuchar "+audio.name){playAudio(audio)}

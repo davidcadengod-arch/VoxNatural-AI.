@@ -37,7 +37,7 @@ class ConvertService:Service(){
  private fun finishAudio(folder:File,sid:Int){
   val wav=File(folder,"audio-"+sid+".wav"); val mp3=File(folder,"audio-"+sid+".mp3")
   report("Codificando MP3")
-  try{Mp3Encoder.encode(wav,mp3);report("Conversión completada · MP3 y WAV")}catch(e:Throwable){report("WAV listo; MP3 no disponible: "+e.message)}
+  try{mp3.delete();Mp3Encoder.encode(wav,mp3);report("Conversión completada · MP3 y WAV")}catch(e:Throwable){report("WAV listo; MP3 no disponible: "+e.message)}
  }
  private fun convert(folder:File){
   try{
@@ -121,7 +121,11 @@ class ConvertService:Service(){
    require(chunks.isNotEmpty())
    val parts=File(folder,"neural-parts-"+sid+"-v7").apply{mkdirs()}
    val signature=File(parts,"signature")
-   val key=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
+   val reference=if(sid==300) NeuralVoice.loadReference(this) else null
+   val digest=java.security.MessageDigest.getInstance("SHA-256")
+   digest.update(text.toByteArray(Charsets.UTF_8))
+   if(reference!=null){val bytes=java.nio.ByteBuffer.allocate(4+reference.first.size*4);bytes.putInt(reference.second);reference.first.forEach{bytes.putFloat(it)};digest.update(bytes.array())}
+   val key=digest.digest().joinToString(""){"%02x".format(it.toInt() and 255)}
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
    File(parts,"chunks.json").writeText(org.json.JSONArray(chunks).toString())
    if(fragment>=0){require(fragment in chunks.indices){"Fragmento inexistente"};require(chunks.indices.all{File(parts,it.toString()+".done").isFile && validNeuralWav(File(parts,it.toString()+".wav"))}){"Primero completa la conversión con la configuración actual"};File(parts,fragment.toString()+".done").delete()}
@@ -132,7 +136,7 @@ class ConvertService:Service(){
      val done=File(parts,index.toString()+".done")
      if(done.isFile && validNeuralWav(f))continue
      done.delete();f.delete()
-     voice.generate(chunk,f)
+     voice.generate(chunk,f,reference?.first,reference?.second?:0)
      require(validNeuralWav(f)){"Fragmento WAV inválido"};done.writeText("ok")
     }
    }
@@ -178,6 +182,7 @@ class ConvertService:Service(){
     fun tag():String{val a=ByteArray(4);src.readFully(a);return String(a,Charsets.US_ASCII)}
     require(tag()=="RIFF");src.skipBytes(4);require(tag()=="WAVE")
     var found=false
+    var localFormat=false
     while(src.filePointer+8<=src.length()){
      val type=tag(); val n=Integer.reverseBytes(src.readInt()).toLong() and 0xffffffffL
      val next=src.filePointer+n+(n%2)
@@ -185,9 +190,9 @@ class ConvertService:Service(){
      if(type=="fmt "){
       require(n>=16);val a=ByteArray(16);src.readFully(a)
       require(a[0].toInt()==1 && a[1].toInt()==0){"Formato WAV no PCM"}
-      if(format==null)format=a else require(format!!.contentEquals(a)){"Formatos diferentes"}
+      if(format==null)format=a else require(format!!.contentEquals(a)){"Formatos diferentes"};localFormat=true
      }else if(type=="data"){
-      require(format!=null);val buf=ByteArray(65536);var left=n
+      require(localFormat && n>0 && n%2==0L && total+n<=0xffffffffL-36);val buf=ByteArray(65536);var left=n
       while(left>0){val count=minOf(left,buf.size.toLong()).toInt();src.readFully(buf,0,count);dst.write(buf,0,count);left-=count}
       total+=n;found=true
      };src.seek(next)
@@ -197,7 +202,7 @@ class ConvertService:Service(){
      val rate=fmt.getInt(4);val align=fmt.getShort(12).toInt() and 65535
      require(rate in 8000..192000 && align in 1..32)
      val count=(rate.toLong()*pauses[index]/1000*align).toInt()
-     dst.write(ByteArray(count));total+=count
+     require(total+count<=0xffffffffL-36);dst.write(ByteArray(count));total+=count
     }
    }
    require(total<=0xffffffffL-36)
