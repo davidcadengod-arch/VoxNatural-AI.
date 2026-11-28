@@ -44,7 +44,7 @@ class ConvertService:Service(){
    val engine=tts?:error("Motor no disponible")
    val v=engine.voices.filter{it.locale.language=="es" && !it.isNetworkConnectionRequired}.maxByOrNull{it.quality}?:error("Instala una voz española sin conexión en Ajustes de síntesis de voz")
    require(engine.setVoice(v)==TextToSpeech.SUCCESS){"No se pudo seleccionar la voz"}
-   val text=File(folder,"text").readText()
+   val text=Pronunciation(this).apply(File(folder,"text").readText())
    val chunks=mutableListOf<String>()
    var pos=0
    val limit=minOf(3000,TextToSpeech.getMaxSpeechInputLength())
@@ -83,7 +83,7 @@ class ConvertService:Service(){
  }
  private fun convertNeural(folder:File,sid:Int){
   try{
-   val text=File(folder,"text").readText()
+   val text=Pronunciation(this).apply(File(folder,"text").readText())
    val normalized=java.text.Normalizer.normalize(text,java.text.Normalizer.Form.NFC)
     .replace("\r\n","\n").replace('\r','\n').replace("\u00ad","").replace('\u00a0',' ')
    val chunks=mutableListOf<String>()

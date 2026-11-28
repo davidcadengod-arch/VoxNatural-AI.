@@ -64,6 +64,14 @@ class MainActivity : Activity() {
    val dialog=android.app.Dialog(this);dialog.setContentView(panel);dialog.setOnDismissListener{render()};dialog.show();dialog.window?.setLayout(-1,-1)
   }catch(e:Exception){toast(e.message?:"No se pudo abrir el libro")}
  }
+ private fun dictionary(){
+  val dict=Pronunciation(this);val panel=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(8),dp(16),dp(8))}
+  val word=EditText(this).apply{hint="Palabra original"};panel.addView(word)
+  val spoken=EditText(this).apply{hint="Cómo debe sonar (vacío para eliminar)"};panel.addView(spoken)
+  val j=dict.entries();val entries=j.keys().asSequence().sorted().joinToString("\n"){it+" → "+j.optString(it)}
+  label(panel,entries.ifBlank{"Sin reglas personalizadas"},14)
+  android.app.AlertDialog.Builder(this).setTitle("Diccionario de pronunciación").setView(ScrollView(this).apply{addView(panel)}).setPositiveButton("Guardar"){_,_->if(word.text.toString().trim().isNotEmpty()){dict.save(word.text.toString().trim(),spoken.text.toString().trim());toast("Regla guardada")}else toast("Escribe una palabra")}.setNegativeButton("Cerrar",null).show()
+ }
  private fun editBook(f:File){
   val fields=LinearLayout(this).apply{orientation=1}
   val title=EditText(this).apply{setText(titleOf(f));hint="Título"};fields.addView(title)
@@ -116,7 +124,7 @@ class MainActivity : Activity() {
   button(nav,"Biblioteca"){library.requestFocus();scroll.smoothScrollTo(0,library.top)}
   button(nav,"Reproductor"){playerDialog()}
   button(nav,"Conversión"){scroll.smoothScrollTo(0,0)}
-  button(nav,"Ajustes"){android.app.AlertDialog.Builder(this).setTitle("Ajustes").setItems(arrayOf(if(dark)"Modo claro" else "Modo oscuro")){_,_->getPreferences(0).edit().putBoolean("dark",!dark).apply();recreate()}.show()}
+  button(nav,"Ajustes"){android.app.AlertDialog.Builder(this).setTitle("Ajustes").setItems(arrayOf(if(dark)"Modo claro" else "Modo oscuro","Diccionario de pronunciación")){_,which->if(which==1)dictionary() else {getPreferences(0).edit().putBoolean("dark",!dark).apply();recreate()}}.show()}
   label(root,"VoxNatural AI",30)
   label(root,"Biblioteca de voz · Beta 3 en desarrollo",16)
   button(root,"Subir") {
