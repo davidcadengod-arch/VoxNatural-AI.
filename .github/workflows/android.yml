@@ -42,7 +42,7 @@ jobs:
         run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
       - name: Compile native MP3 encoder
         run: bash scripts/build-mp3.sh
-      - run: gradle :app:assembleDebug --no-daemon
+      - run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
       - name: Verify APK
         run: |
           unzip -t app/build/outputs/apk/debug/app-debug.apk >/dev/null

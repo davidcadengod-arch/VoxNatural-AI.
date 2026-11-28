@@ -15,3 +15,5 @@ android {
  kotlinOptions { jvmTarget = "17" }
 }
 dependencies { implementation(files("libs/sherpa.aar")); implementation("com.tom-roush:pdfbox-android:2.0.27.0") }
+
+dependencies { testImplementation("junit:junit:4.13.2") }

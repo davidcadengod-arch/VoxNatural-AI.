@@ -2,7 +2,7 @@ name: PocketTTS synthesis smoke test
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/pocket-synthesis.yml', 'scripts/fetch-pocket-es.sh']
+    paths: ['.github/workflows/pocket-synthesis.yml', 'scripts/fetch-pocket-es.sh', 'app/src/main/java/**']
   workflow_dispatch:
 permissions:
   contents: read
