@@ -9,7 +9,7 @@ permissions:
 jobs:
   synthesis:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +60,7 @@ jobs:
           def f(n): return str(p/n)
           from unam_g2p import IPA29
           import re, unicodedata
-          text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado?"
+          text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado? ¡Escúchame! El corazón, la respiración y la anestesiología requieren atención. La niña recogió flores amarillas mientras el médico explicaba la recuperación. El paciente tenía hipertensión, diabetes y una infección respiratoria. Quería comprender por qué había cambiado su tratamiento. Después de conversar, regresaron tranquilamente a casa."
           words=re.findall(r'[^\W\d_]+',text.lower())
           vocab={line.rsplit(maxsplit=1)[0] for line in (p/'tokens.txt').read_text().splitlines() if len(line.rsplit(maxsplit=1))==2}
           lex=p/'unam-lexicon.txt'
@@ -85,7 +85,7 @@ jobs:
           else:
               model=s.OfflineTtsModelConfig(vits=s.OfflineTtsVitsModelConfig(model=f("es_ES-davefx-medium.onnx"),tokens=f("tokens.txt")),num_threads=4,provider="cpu")
           tts=s.OfflineTts(s.OfflineTtsConfig(model=model))
-          text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado?"
+          text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado? ¡Escúchame! El corazón, la respiración y la anestesiología requieren atención. La niña recogió flores amarillas mientras el médico explicaba la recuperación. El paciente tenía hipertensión, diabetes y una infección respiratoria. Quería comprender por qué había cambiado su tratamiento. Después de conversar, regresaron tranquilamente a casa."
           if kind=="supertonic":
               cfg=s.GenerationConfig()
               cfg.sid=0
@@ -109,7 +109,7 @@ jobs:
                   audio=tts.generate(text.lower().replace("¿","").replace("¡",""),sid=28,speed=0.97)
           a=np.asarray(audio.samples)
           print("Audio diagnostics:", "samples",a.size,"rate",audio.sample_rate,"finite",bool(np.isfinite(a).all()),"peak",float(np.max(np.abs(a))) if a.size else 0,flush=True)
-          assert a.size>audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
+          assert a.size>10*audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
           with wave.open("sample.wav","wb") as out:
               out.setnchannels(1);out.setsampwidth(2);out.setframerate(audio.sample_rate)
               out.writeframes((np.clip(a,-1,1)*32767).astype("<i2").tobytes())
