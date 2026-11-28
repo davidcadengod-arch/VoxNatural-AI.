@@ -1,0 +1,47 @@
+name: Native MP3 functional regression
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mp3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: sudo apt-get update && sudo apt-get install -y libmp3lame-dev ffmpeg
+      - name: Test actual JNI encoder
+        run: |
+          mkdir -p com/voxnatural/app
+          cat > com/voxnatural/app/Mp3Encoder.java <<'EOF'
+          package com.voxnatural.app;
+          public class Mp3Encoder {
+            static { System.loadLibrary("voxmp3"); }
+            private native int encodeNative(String input,String output);
+            public static void main(String[] args) {
+              int result=new Mp3Encoder().encodeNative(args[0],args[1]);
+              if(result!=Integer.parseInt(args[2])) throw new AssertionError("Unexpected result "+result);
+            }
+          }
+          EOF
+          gcc -shared -fPIC -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" -I/usr/include/lame app/src/main/cpp/mp3.c -lmp3lame -o libvoxmp3.so
+          javac com/voxnatural/app/Mp3Encoder.java
+          python3 - <<'PY'
+          import wave, math, struct
+          with wave.open("valid.wav","wb") as f:
+              f.setparams((1,2,24000,0,"NONE","not compressed"))
+              f.writeframes(b"".join(struct.pack("<h",int(10000*math.sin(2*math.pi*440*i/24000))) for i in range(48000)))
+          data=open("valid.wav","rb").read()
+          open("truncated.wav","wb").write(data[:-100])
+          open("bad.wav","wb").write(b"bad")
+          PY
+          java -Djava.library.path=. com.voxnatural.app.Mp3Encoder valid.wav valid.mp3 0
+          ffmpeg -v error -i valid.mp3 -f null -
+          ffprobe -v error -show_entries format=duration -of csv=p=0 valid.mp3 | python3 -c 'import sys; assert 1.9<float(sys.stdin.read())<2.2'
+          java -Djava.library.path=. com.voxnatural.app.Mp3Encoder truncated.wav truncated.mp3 -1
+          java -Djava.library.path=. com.voxnatural.app.Mp3Encoder bad.wav bad.mp3 -1
