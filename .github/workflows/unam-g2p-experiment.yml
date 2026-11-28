@@ -90,42 +90,7 @@ jobs:
               rows=tokenfile.read_text().splitlines()
               print("Piper vocabulary prefix:",repr(rows[:12]),flush=True)
               parsed={line.rsplit(maxsplit=1)[0]:int(line.rsplit(maxsplit=1)[1]) for line in rows if len(line.rsplit(maxsplit=1))==2}
-              for symbol,aliases,expected in [('_',('<pad>','<blank>'),0),('^',('<bos>','<s>'),1),('
-          text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado?"
-          if kind=="supertonic":
-              cfg=s.GenerationConfig()
-              cfg.sid=0
-              cfg.num_steps=8
-              cfg.extra={"lang":"es"}
-              audio=tts.generate(text,cfg)
-          else:
-              if kind=="piper":
-                  cfg=s.GenerationConfig()
-                  cfg.sid=0
-                  cfg.speed=0.97
-                  # Piper expects phoneme codepoints, with its own padding and boundary handling.
-                  entries={line.split()[0]:line.split()[1:] for line in lex.read_text().splitlines()}
-                  normalized=text.lower().replace("¿","").replace("¡","")
-                  units=re.findall(r'[^\W\d_]+|[^\w\s]|\s+',normalized)
-                  phonemes="".join("".join(entries[u]) if u in entries else (" " if u.isspace() else u) for u in units)
-                  print("Piper phonemes:",repr(phonemes),flush=True)
-                  cfg.phoneme_codepoints=[[ord(c) for c in phonemes]]
-                  audio=tts.generate(normalized,cfg)
-              else:
-                  audio=tts.generate(text.lower().replace("¿","").replace("¡",""),sid=28,speed=0.97)
-          a=np.asarray(audio.samples)
-          print("Audio diagnostics:", "samples",a.size,"rate",audio.sample_rate,"finite",bool(np.isfinite(a).all()),"peak",float(np.max(np.abs(a))) if a.size else 0,flush=True)
-          assert a.size>audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
-          with wave.open("sample.wav","wb") as out:
-              out.setnchannels(1);out.setsampwidth(2);out.setframerate(audio.sample_rate)
-              out.writeframes((np.clip(a,-1,1)*32767).astype("<i2").tobytes())
-          print(kind,a.size,audio.sample_rate)
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: unam-sample-${{ matrix.model }}-${{ matrix.runtime }}
-          path: sample.wav
-,('<eos>','</s>'),2)]:
+              for symbol,aliases,expected in [('_',('<pad>','<blank>'),0),('^',('<bos>','<s>'),1),('$,('<eos>','</s>'),2)]:
                   if symbol not in parsed:
                       matches=[key for key in aliases if parsed.get(key)==expected]
                       assert len(matches)==1,(symbol,expected,rows[:12])
@@ -153,7 +118,7 @@ jobs:
                   cfg.phoneme_codepoints=[[ord(c) for c in phonemes]]
                   audio=tts.generate(normalized,cfg)
               else:
-                  audio=tts.generate(text,sid=28,speed=0.97)
+                  audio=tts.generate(text.lower().replace("¿","").replace("¡",""),sid=28,speed=0.97)
           a=np.asarray(audio.samples)
           print("Audio diagnostics:", "samples",a.size,"rate",audio.sample_rate,"finite",bool(np.isfinite(a).all()),"peak",float(np.max(np.abs(a))) if a.size else 0,flush=True)
           assert a.size>audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
