@@ -4,9 +4,10 @@ import com.k2fsa.sherpa.onnx.*
 import java.io.File
 
 class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
+ private val pocket=sid==300
  private val piper=sid==100
  private val supertonic=sid in 200..209
- private val asset=if(supertonic)"supertonic" else if(piper)"piper" else "kokoro"
+ private val asset=if(pocket)"pocket" else if(supertonic)"supertonic" else if(piper)"piper" else "kokoro"
  private val dir=File(context.filesDir,asset+"-v1")
  private val tts:OfflineTts
  init {
@@ -21,7 +22,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
     File(dir,"ready").writeText("1")
    }
   }
-  val config=if(supertonic) OfflineTtsConfig(model=OfflineTtsModelConfig(supertonic=OfflineTtsSupertonicModelConfig(
+  val config=if(pocket) OfflineTtsConfig(model=OfflineTtsModelConfig(pocket=OfflineTtsPocketModelConfig(lmFlow=File(dir,"lm_flow.int8.onnx").path,lmMain=File(dir,"lm_main.int8.onnx").path,encoder=File(dir,"encoder.onnx").path,decoder=File(dir,"decoder.int8.onnx").path,textConditioner=File(dir,"text_conditioner.onnx").path,vocabJson=File(dir,"vocab.json").path,tokenScoresJson=File(dir,"token_scores.json").path),numThreads=4,provider="cpu"),maxNumSentences=1) else if(supertonic) OfflineTtsConfig(model=OfflineTtsModelConfig(supertonic=OfflineTtsSupertonicModelConfig(
    durationPredictor=File(dir,"duration_predictor.int8.onnx").path,
    textEncoder=File(dir,"text_encoder.int8.onnx").path,
    vectorEstimator=File(dir,"vector_estimator.int8.onnx").path,
@@ -31,9 +32,9 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
    voiceStyle=File(dir,"voice.bin").path),numThreads=4,provider="cpu"),maxNumSentences=1) else if(piper) OfflineTtsConfig(model=OfflineTtsModelConfig(vits=OfflineTtsVitsModelConfig(model=File(dir,"model.onnx").path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path),numThreads=4,provider="cpu"),maxNumSentences=1) else OfflineTtsConfig(model=OfflineTtsModelConfig(
    kokoro=OfflineTtsKokoroModelConfig(model=File(dir,"model.onnx").path,voices=File(dir,"voices.bin").path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path,lang="es"),numThreads=4,provider="cpu"),maxNumSentences=1)
   tts=OfflineTts(config=config)
-  if(!piper && (if(supertonic)sid-200 else sid) !in 0 until tts.numSpeakers()){tts.release();error("Voz no disponible en el modelo")}
+  if(!pocket && !piper && (if(supertonic)sid-200 else sid) !in 0 until tts.numSpeakers()){tts.release();error("Voz no disponible en el modelo")}
  }
- fun generate(text:String,out:File){
+ fun generate(text:String,out:File,referenceAudio:FloatArray?=null,referenceSampleRate:Int=0){
   val expressive=text.count{it=='!' || it=='¡'}
   val reflective=text.contains('…') || text.contains("...")
   val speed=when{
@@ -42,7 +43,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
    text.endsWith("?") -> 0.98f
    else -> 0.97f
   }
-  val audio=if(supertonic) tts.generateWithConfig(text,GenerationConfig(sid=sid-200,speed=speed,numSteps=8,extra=mapOf("lang" to "es"))) else tts.generate(text,if(piper)0 else sid,speed)
+  val audio=if(pocket){require(referenceAudio!=null && referenceAudio.isNotEmpty() && referenceSampleRate>0){"PocketTTS requiere una referencia de voz autorizada"};tts.generateWithConfig(text,GenerationConfig(referenceAudio=referenceAudio,referenceSampleRate=referenceSampleRate,speed=speed,numSteps=10))} else if(supertonic) tts.generateWithConfig(text,GenerationConfig(sid=sid-200,speed=speed,numSteps=8,extra=mapOf("lang" to "es"))) else tts.generate(text,if(piper)0 else sid,speed)
   require(audio.samples.isNotEmpty() && audio.samples.all{it.isFinite()}){"Audio neuronal inválido"}
   // Preserve dynamics: attenuate only peaks that risk clipping, with short edge fades.
   val samples=audio.samples

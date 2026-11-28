@@ -38,6 +38,8 @@ jobs:
           S=/tmp/sherpa-onnx-supertonic-3-tts-int8-2026-05-11
           cp "$S"/{duration_predictor.int8.onnx,text_encoder.int8.onnx,vector_estimator.int8.onnx,vocoder.int8.onnx,tts.json,unicode_indexer.bin,voice.bin} app/src/main/assets/supertonic/
           curl -fL --retry 3 https://huggingface.co/Supertone/supertonic-3/resolve/main/LICENSE -o app/src/main/assets/supertonic/LICENSE
+      - name: Bundle verified PocketTTS model
+        run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
       - name: Compile native MP3 encoder
         run: bash scripts/build-mp3.sh
       - run: gradle :app:assembleDebug --no-daemon
