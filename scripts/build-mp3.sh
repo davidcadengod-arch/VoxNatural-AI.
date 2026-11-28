@@ -32,5 +32,10 @@ export CFLAGS="-O2 -fPIC -Wno-error=implicit-function-declaration"
 ./configure --host=aarch64-linux-android --disable-frontend --disable-decoder --disable-shared --enable-static --with-pic
 make -C libmp3lame -j2
 mkdir -p "$ROOT/app/src/main/jniLibs/arm64-v8a" "$ROOT/app/src/main/assets/licenses"
-"$CC" -shared -O2 -Iinclude "$ROOT/app/src/main/cpp/mp3.c" libmp3lame/.libs/libmp3lame.a -lm -Wl,-z,max-page-size=16384 -o "$ROOT/app/src/main/jniLibs/arm64-v8a/libvoxmp3.so"
+mkdir -p "$ROOT/compliance/lame"
+"$CC" -c -O2 -fPIC -Iinclude "$ROOT/app/src/main/cpp/mp3.c" -o "$ROOT/compliance/lame/mp3.o"
+"$CC" -shared "$ROOT/compliance/lame/mp3.o" libmp3lame/.libs/libmp3lame.a -lm -Wl,-z,max-page-size=16384 -o "$ROOT/app/src/main/jniLibs/arm64-v8a/libvoxmp3.so"
+cp "$WORK/lame.tar.gz" "$ROOT/compliance/lame/"
+cp "$ROOT/app/src/main/cpp/mp3.c" "$ROOT/scripts/build-mp3.sh" COPYING "$ROOT/compliance/lame/"
+printf '%s\n' 'Use Android NDK r27c arm64 API 26 clang to build LAME as in build-mp3.sh, then clang -shared mp3.o libmp3lame.a -lm -Wl,-z,max-page-size=16384 -o libvoxmp3.so. Replacement APK must be re-signed by recipient.' > "$ROOT/compliance/lame/RELINK.txt"
 cp COPYING "$ROOT/app/src/main/assets/licenses/LAME-LGPL.txt"
