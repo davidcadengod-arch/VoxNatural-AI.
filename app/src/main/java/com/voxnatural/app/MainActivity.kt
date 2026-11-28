@@ -31,6 +31,39 @@ class MainActivity : Activity() {
  private lateinit var miniToggle:Button
  private fun titleOf(f:File)=File(f,"title").takeIf{it.isFile}?.readText()?.takeIf{it.isNotBlank()}?:File(f,"name").readText().substringBeforeLast(".")
  private fun authorOf(f:File)=File(f,"author").takeIf{it.isFile}?.readText()?.takeIf{it.isNotBlank()}?:"Autor desconocido"
+ private fun readingProgress(f:File):String {
+  val total=File(f,"text").length()
+  val pos=getPreferences(0).getInt("read:"+f.name,0)
+  val pages=getPreferences(0).getInt("pages:"+f.name,0)
+  return if(pages>0)"Página ${pos+1} de $pages · ${((pos+1)*100L/pages).coerceAtMost(100)}%" else if(total>0)"Sin iniciar lectura" else "Sin texto"
+ }
+ private fun readBook(f:File){
+  try{
+   val source=File(f,"text").readText()
+   val pages=mutableListOf<String>();var start=0
+   while(start<source.length){var end=(start+1800).coerceAtMost(source.length);if(end<source.length){val space=source.lastIndexOf(' ',end);if(space>start+900)end=space};pages.add(source.substring(start,end));start=end}
+   if(pages.isEmpty()){toast("Sin texto");return}
+   val prefs=getPreferences(0);var index=prefs.getInt("read:"+f.name,0).coerceIn(0,pages.lastIndex)
+   var doublePage=false
+   val panel=LinearLayout(this).apply{orientation=1;setBackgroundColor(paper());setPadding(dp(16),dp(12),dp(16),dp(12))}
+   val stats=label(panel,"",16)
+   val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply{max=pages.size};panel.addView(bar)
+   val spread=LinearLayout(this).apply{orientation=0};panel.addView(spread,LinearLayout.LayoutParams(-1,0,1f))
+   fun pageView():TextView=TextView(this).apply{textSize=18f;setTextColor(ink());typeface=android.graphics.Typeface.SERIF;setPadding(dp(10),dp(10),dp(10),dp(10));setTextIsSelectable(true)}
+   val left=pageView();val right=pageView()
+   val ls=ScrollView(this).apply{addView(left)};val rs=ScrollView(this).apply{addView(right)}
+   spread.addView(ls,LinearLayout.LayoutParams(0,-1,1f));spread.addView(rs,LinearLayout.LayoutParams(0,-1,1f))
+   fun update(){left.text=pages[index];right.text=pages.getOrNull(index+1)?:"";rs.visibility=if(doublePage)android.view.View.VISIBLE else android.view.View.GONE;ls.scrollTo(0,0);rs.scrollTo(0,0);stats.text="Página ${index+1} de ${pages.size} · ${pages.size-index-1} restantes";bar.progress=index+1;prefs.edit().putInt("read:"+f.name,index).putInt("pages:"+f.name,pages.size).apply()}
+   val controls=LinearLayout(this).apply{orientation=0};panel.addView(controls)
+   button(controls,"Anterior"){index=(index-if(doublePage)2 else 1).coerceAtLeast(0);update()}
+   button(controls,"Siguiente"){index=(index+if(doublePage)2 else 1).coerceAtMost(pages.lastIndex);update()}
+   button(panel,"Una / dos páginas"){doublePage=!doublePage;update()}
+   button(panel,"Guardar marcador"){prefs.edit().putInt("mark:"+f.name,index).apply();toast("Marcador guardado")}
+   button(panel,"Ir al marcador"){index=prefs.getInt("mark:"+f.name,index).coerceIn(0,pages.lastIndex);update()}
+   update()
+   val dialog=android.app.Dialog(this);dialog.setContentView(panel);dialog.setOnDismissListener{render()};dialog.show();dialog.window?.setLayout(-1,-1)
+  }catch(e:Exception){toast(e.message?:"No se pudo abrir el libro")}
+ }
  private fun editBook(f:File){
   val fields=LinearLayout(this).apply{orientation=1}
   val title=EditText(this).apply{setText(titleOf(f));hint="Título"};fields.addView(title)
@@ -117,7 +150,8 @@ class MainActivity : Activity() {
    val cover=TextView(this).apply{text=titleOf(f);textSize=16f;setTextColor(Color.WHITE);setBackgroundColor(burgundy);gravity=android.view.Gravity.CENTER;typeface=android.graphics.Typeface.SERIF;setPadding(dp(8),dp(8),dp(8),dp(8))}
    card.addView(cover,LinearLayout.LayoutParams(dp(100),dp(145)))
    val info=LinearLayout(this).apply{orientation=1;setPadding(dp(12),0,0,0)};card.addView(info,LinearLayout.LayoutParams(0,-2,1f))
-   label(info,titleOf(f),23);label(info,authorOf(f),14)
+   label(info,titleOf(f),23);label(info,authorOf(f),14);label(info,readingProgress(f),14)
+   button(info,"Leer"){readBook(f)}
    button(info,if(selected==f)"Seleccionado" else "Seleccionar"){selected=f;render();showStatus()}
    button(info,"Editar datos"){editBook(f)}
    library.addView(card)
