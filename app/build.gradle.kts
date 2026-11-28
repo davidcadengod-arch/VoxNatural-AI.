@@ -5,6 +5,7 @@ require(phonemizer in setOf("legacy", "unam")) { "Unknown phonemizer: $phonemize
 android {
  sourceSets.named("main") {
   java.srcDir("src/$phonemizer/java")
+  assets.srcDir("src/$phonemizer/assets")
  }
  namespace = "com.voxnatural.app"
  compileSdk = 35

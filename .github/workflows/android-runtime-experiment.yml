@@ -74,6 +74,8 @@ jobs:
         run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
       - name: Compile native MP3 encoder
         run: bash scripts/build-mp3.sh
+      - name: Fetch native source snapshots
+        run: bash scripts/collect-native-source.sh 2.0.1 compliance/native-source
       - name: Collect dependency and license evidence
         run: |
           mkdir -p compliance app/src/main/assets/licenses
@@ -102,7 +104,7 @@ jobs:
           TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           "$TOOLS/apksigner" verify "$APK"
           python3 scripts/verify-apk.py "$APK" --phonemizer unam
-          (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" > APK.sha256)
+          (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" | tee APK.sha256)
       - name: Upload JVM test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

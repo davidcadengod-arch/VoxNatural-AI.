@@ -61,16 +61,18 @@ jobs:
         run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
       - name: Compile native MP3 encoder
         run: bash scripts/build-mp3.sh
+      - name: Fetch native source snapshots
+        run: bash scripts/collect-native-source.sh 1.13.8 compliance/native-source
       - name: Collect dependency and license evidence
         run: |
           mkdir -p compliance app/src/main/assets/licenses
           cp THIRD_PARTY_NOTICES.md POCKET-NOTICE.md SUPERTONIC-NOTICE.md app/src/main/assets/licenses/
           gradle :app:dependencies --configuration debugRuntimeClasspath --no-daemon > compliance/runtime-dependencies.txt
           unzip -l app/libs/sherpa.aar > compliance/sherpa-archive.txt
-          find app/src/main/assets -type f \( -iname '*license*' -o -iname '*notice*' -o -iname 'MODEL_CARD' \) > compliance/license-files.txt
+          find app/src/main/assets app/src/legacy/assets -type f \( -iname '*license*' -o -iname '*notice*' -o -iname 'MODEL_CARD' \) > compliance/license-files.txt
           sha256sum app/libs/sherpa.aar > compliance/native-sha256.txt
           sha256sum /tmp/{kokoro,piper,supertonic}.tar.bz2 compliance/lame/lame.tar.gz > compliance/archive-sha256.txt
-          find app/src/main/assets -type f -print0 | sort -z | xargs -0 sha256sum > compliance/asset-sha256.txt
+          find app/src/main/assets app/src/legacy/assets -type f -print0 | sort -z | xargs -0 sha256sum > compliance/asset-sha256.txt
           mkdir -p compliance/android-native
           unzip -q app/libs/sherpa.aar 'jni/arm64-v8a/*.so' -d compliance/android-native
           for library in compliance/android-native/jni/arm64-v8a/*.so app/src/main/jniLibs/arm64-v8a/*.so; do
@@ -89,7 +91,7 @@ jobs:
           TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           "$TOOLS/apksigner" verify "$APK"
           python3 scripts/verify-apk.py "$APK"
-          (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" > APK.sha256)
+          (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" | tee APK.sha256)
       - name: Upload JVM test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

@@ -46,6 +46,11 @@ def verify(path: Path, phonemizer: str) -> None:
             "lib/arm64-v8a/libsherpa-onnx-jni.so",
             "assets/licenses/THIRD_PARTY_NOTICES.md",
             "assets/licenses/LAME-LGPL.txt",
+            "assets/licenses/PDFBox-Android-LICENSE.txt",
+            "assets/licenses/PDFBox-Android-NOTICE.txt",
+            "assets/licenses/Bouncy-Castle-1.72.txt",
+            "assets/licenses/Apache-2.0.txt",
+            "assets/licenses/UNAM-G2P-APACHE-2.0.txt",
         )
     )
     with ZipFile(path) as apk:
@@ -61,14 +66,16 @@ def verify(path: Path, phonemizer: str) -> None:
         if abis != {"arm64-v8a"}:
             raise ValueError(f"Unexpected native ABIs: {sorted(abis)}")
         if phonemizer == "unam":
-            if not entries.get("assets/licenses/UNAM-G2P-APACHE-2.0.txt"):
-                raise ValueError("Missing UNAM-G2P license")
             if any("/espeak-ng-data/" in name for name in entries):
                 raise ValueError("The UNAM APK must exclude eSpeak data")
-        for engine in ("kokoro", "piper") if phonemizer == "legacy" else ():
-            data = f"assets/{engine}/espeak-ng-data/"
-            if not any(name.startswith(data) and size for name, size in entries.items()):
-                raise ValueError(f"Missing phonemizer data for {engine}")
+        else:
+            for license_name in ("Piper-phonemize-MIT.txt", "eSpeak-NG-GPL-3.0.txt"):
+                if not entries.get(f"assets/licenses/{license_name}"):
+                    raise ValueError(f"Missing legacy license: {license_name}")
+            for engine in ("kokoro", "piper"):
+                data = f"assets/{engine}/espeak-ng-data/"
+                if not any(name.startswith(data) and size for name, size in entries.items()):
+                    raise ValueError(f"Missing phonemizer data for {engine}")
         corrupt = apk.testzip()
         if corrupt:
             raise ValueError(f"Corrupt APK entry: {corrupt}")
