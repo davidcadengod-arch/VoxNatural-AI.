@@ -90,7 +90,7 @@ jobs:
               rows=tokenfile.read_text().splitlines()
               print("Piper vocabulary prefix:",repr(rows[:12]),flush=True)
               parsed={line.rsplit(maxsplit=1)[0]:int(line.rsplit(maxsplit=1)[1]) for line in rows if len(line.rsplit(maxsplit=1))==2}
-              for symbol,aliases,expected in [('_',('<pad>','<blank>'),0),('^',('<bos>','<s>'),1),('$,('<eos>','</s>'),2)]:
+              for symbol,aliases,expected in [('_',('<pad>','<blank>'),0),('^',('<bos>','<s>'),1),('$',('<eos>','</s>'),2)]:
                   if symbol not in parsed:
                       matches=[key for key in aliases if parsed.get(key)==expected]
                       assert len(matches)==1,(symbol,expected,rows[:12])
