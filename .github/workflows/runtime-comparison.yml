@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/runtime-comparison.yml', 'scripts/fetch-pocket-es.sh', 'app/src/main/java/**']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

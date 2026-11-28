@@ -5,7 +5,6 @@ import android.os.*
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.io.*
-import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -89,42 +88,9 @@ class ConvertService:Service(){
  private fun convertNeural(folder:File,sid:Int,fragment:Int){
   try{
    val text=Pronunciation(this).apply(File(folder,"text").readText())
-   val normalized=java.text.Normalizer.normalize(text,java.text.Normalizer.Form.NFC)
-    .replace("\r\n","\n").replace('\r','\n').replace("\u00ad","").replace('\u00a0',' ')
-   val chunks=mutableListOf<String>()
-   val pauses=mutableListOf<Int>()
-   val breaks=java.text.BreakIterator.getSentenceInstance(Locale("es"))
-   fun emit(part:String,pause:Int){
-    if(part.isNotBlank()){chunks.add(part.trim());pauses.add(pause)}
-   }
-   for(paragraph in normalized.split(Regex("\\n\\s*\\n"))){
-    val clean=paragraph.replace(Regex("\\s+")," ").trim()
-    if(clean.isEmpty())continue
-    breaks.setText(clean)
-    var begin=breaks.first()
-    var finish=breaks.next()
-    var pending=""
-    while(finish!=java.text.BreakIterator.DONE){
-     val sentence=clean.substring(begin,finish).trim()
-     if(pending.isNotEmpty() && pending.length+sentence.length+1>260){
-      emit(pending,100);pending=""
-     }
-     pending=(pending+" "+sentence).trim()
-     while(pending.length>260){
-      val clause=pending.lastIndexOfAny(charArrayOf(';',':',','),259)
-      val space=pending.lastIndexOf(' ',259)
-      var cut=if(clause>120)clause+1 else if(space>0)space+1 else 260
-      if(Character.isHighSurrogate(pending[cut-1]))cut--
-      emit(pending.substring(0,cut),if(clause>120)70 else 0)
-      pending=pending.substring(cut).trim()
-     }
-     begin=finish;finish=breaks.next()
-    }
-    if(pending.isNotEmpty())emit(pending,240)
-    else if(pauses.isNotEmpty())pauses[pauses.lastIndex]=240
-   }
-   require(chunks.isNotEmpty())
-   val parts=File(folder,"neural-parts-"+sid+"-v7").apply{mkdirs()}
+   val (chunks, pauses)=segmentNeuralText(text)
+   val cacheVersion=if(USES_ESPEAK_DATA) "v7" else "unam-v1"
+   val parts=File(folder,"neural-parts-"+sid+"-"+cacheVersion).apply{mkdirs()}
    val signature=File(parts,"signature")
    val reference=if(sid==300) NeuralVoice.loadReference(this) else null
    val key=ConversionIdentity.key(text,reference)
@@ -143,38 +109,12 @@ class ConvertService:Service(){
      require(validNeuralWav(f)){"Fragmento WAV inválido"};done.writeText("ok")
     }
    }
+   checkActive()
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio-"+sid+".wav"),pauses)
    finishAudio(folder,sid)
   }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
- // Validate cached PCM before reuse; reject truncated or empty data chunks.
- private fun validNeuralWav(file:File):Boolean = try {
-  RandomAccessFile(file,"r").use { src ->
-   fun tag():String { val a=ByteArray(4);src.readFully(a);return String(a,Charsets.US_ASCII) }
-   fun uint():Long = Integer.reverseBytes(src.readInt()).toLong() and 0xffffffffL
-   require(tag()=="RIFF")
-   val end=uint()+8
-   require(end==src.length() && tag()=="WAVE")
-   var align=0
-   var data=0L
-   while(src.filePointer+8<=end){
-    val type=tag();val n=uint();val next=src.filePointer+n+(n%2)
-    require(next<=end)
-    if(type=="fmt "){
-     require(n>=16)
-     val a=ByteArray(16);src.readFully(a)
-     val fmt=java.nio.ByteBuffer.wrap(a).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-     require(fmt.getShort(0).toInt()==1 && fmt.getShort(2).toInt()==1 && fmt.getShort(14).toInt()==16)
-     require(fmt.getInt(4) in 8000..192000)
-     align=fmt.getShort(12).toInt()
-     require(align==2)
-    }else if(type=="data"){require(align>0 && n>0 && n%align==0L);data+=n}
-    src.seek(next)
-   }
-   src.filePointer==end && data>0 && align==2
-  }
- }catch(e:Exception){false}
  private fun merge(files:List<File>,out:File,pauses:List<Int> = emptyList()){
   val tmp=File(out.parentFile,"audio.tmp")
   var format:ByteArray?=null
@@ -182,6 +122,7 @@ class ConvertService:Service(){
   RandomAccessFile(tmp,"rw").use{dst->
    dst.setLength(0);dst.write(ByteArray(44))
    for((index,f) in files.withIndex())RandomAccessFile(f,"r").use{src->
+    checkActive()
     fun tag():String{val a=ByteArray(4);src.readFully(a);return String(a,Charsets.US_ASCII)}
     require(tag()=="RIFF");src.skipBytes(4);require(tag()=="WAVE")
     var found=false
@@ -211,6 +152,7 @@ class ConvertService:Service(){
    require(total<=0xffffffffL-36)
    dst.seek(0);dst.writeBytes("RIFF");dst.writeInt(Integer.reverseBytes((total+36).toInt()));dst.writeBytes("WAVEfmt ");dst.writeInt(Integer.reverseBytes(16));dst.write(format!!);dst.writeBytes("data");dst.writeInt(Integer.reverseBytes(total.toInt()))
   }
+  checkActive()
   require(tmp.renameTo(out)){"No se pudo guardar WAV"}
  }
  override fun onDestroy(){interrupted=true;tts?.shutdown();if(lock?.isHeld==true)lock?.release();super.onDestroy()}

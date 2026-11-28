@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/model-runtime-experiment.yml']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +17,13 @@ jobs:
       matrix:
         model: [supertonic, kokoro, piper]
         runtime: ['1.13.8', '2.0.1']
+        # Sherpa 2.x requires externally supplied phonemes or a lexicon.
+        # See unam-g2p-experiment.yml for those Kokoro/Piper configurations.
+        exclude:
+          - model: kokoro
+            runtime: '2.0.1'
+          - model: piper
+            runtime: '2.0.1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
