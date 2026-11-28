@@ -36,7 +36,6 @@ class ConvertService:Service(){
  }
  private fun finishAudio(folder:File,sid:Int){
   val wav=File(folder,"audio-"+sid+".wav"); val mp3=File(folder,"audio-"+sid+".mp3")
-  mp3.delete()
   report("Codificando MP3")
   try{Mp3Encoder.encode(wav,mp3);report("Conversión completada · MP3 y WAV")}catch(e:Throwable){report("WAV listo; MP3 no disponible: "+e.message)}
  }
@@ -120,13 +119,13 @@ class ConvertService:Service(){
     else if(pauses.isNotEmpty())pauses[pauses.lastIndex]=240
    }
    require(chunks.isNotEmpty())
-   val parts=File(folder,"neural-parts-"+sid+"-v6").apply{mkdirs()}
+   val parts=File(folder,"neural-parts-"+sid+"-v7").apply{mkdirs()}
    val signature=File(parts,"signature")
    val key=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
-     report((if(sid==100)"Piper: " else "Kokoro: ")+(index+1)+" de "+chunks.size)
+     report((when(sid){100->"Piper: ";in 200..209->"Supertonic: ";else->"Kokoro: "})+(index+1)+" de "+chunks.size)
      val f=File(parts,index.toString()+".wav")
      val done=File(parts,index.toString()+".done")
      if(done.isFile && f.length()>44)continue

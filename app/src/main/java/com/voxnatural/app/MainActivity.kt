@@ -31,7 +31,7 @@ class MainActivity : Activity() {
   root=LinearLayout(this).apply { orientation=1; setPadding(28,30,28,30); setBackgroundColor(Color.rgb(17,24,39)) }
   setContentView(ScrollView(this).apply { addView(root) })
   label(root,"VoxNatural AI",30)
-  label(root,"Tu biblioteca de voz · 3.0 alpha",16)
+  label(root,"Tu biblioteca de voz · 3.0 beta2",16)
   button(root,"Importar PDF, Word o TXT") {
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain")) },10)
   }

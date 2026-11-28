@@ -47,6 +47,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
   // Preserve dynamics: attenuate only peaks that risk clipping, with short edge fades.
   val samples=audio.samples
   val peak=samples.maxOf{ kotlin.math.abs(it) }
+  require(audio.sampleRate in 8000..192000 && peak>0.0001f){"Audio neuronal silencioso o frecuencia inválida"}
   val peakLimit=0.98f
   val gain=if(peak>peakLimit)peakLimit/peak else 1f
   val fade=minOf(audio.sampleRate/200,samples.size/2)
