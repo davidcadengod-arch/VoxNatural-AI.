@@ -6,8 +6,8 @@ from zipfile import ZipFile
 
 
 MODELS = {
-    "kokoro": ("model.onnx", "voices.bin", "tokens.txt"),
-    "piper": ("model.onnx", "tokens.txt"),
+    "kokoro": ("model.onnx", "voices.bin", "tokens.txt", "LICENSE"),
+    "piper": ("model.onnx", "tokens.txt", "MODEL_CARD"),
     "pocket": (
         "lm_flow.int8.onnx",
         "lm_main.int8.onnx",

@@ -7,12 +7,7 @@ import android.widget.*
 import android.view.ViewGroup
 import java.io.File
 import java.util.UUID
-import java.util.zip.ZipInputStream
-import org.xmlpull.v1.XmlPullParser
-import android.util.Xml
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.text.PDFTextStripper
 
 class MainActivity : Activity() {
  private lateinit var root: LinearLayout
@@ -274,13 +269,7 @@ class MainActivity : Activity() {
     val name=contentResolver.query(uri,null,null,null,null)?.use { c -> if(c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null } ?: "Documento.txt"
     val f=File(docs,UUID.randomUUID().toString()).apply{mkdirs()}; folder=f
     val original=File(f,"original"); contentResolver.openInputStream(uri)!!.use { i->original.outputStream().use{i.copyTo(it)} }
-    val text=when(name.substringAfterLast(".").lowercase()){
-     "pdf"->PDDocument.load(original).use{PDFTextStripper().getText(it)}
-     "docx"->readWord(original)
-     "txt"->original.readText()
-     else->error("Formato no compatible")
-    }
-    require(text.isNotBlank()){"No se encontró texto digital"}
+    val text=DocumentText.read(original,name)
     File(f,"text").writeText(text); File(f,"name").writeText(name)
     if(name.endsWith(".pdf",true))try{
      android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(original,android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use{r->r.openPage(0).use{p->val bmp=android.graphics.Bitmap.createBitmap(240,(240f*p.height/p.width).toInt().coerceIn(1,600),android.graphics.Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);File(f,"cover.png").outputStream().use{bmp.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bmp.recycle()}}
@@ -288,22 +277,5 @@ class MainActivity : Activity() {
     runOnUiThread { if(!isDestroyed){selected=f; render(); showStatus()} }
    }catch(e:Exception){folder?.deleteRecursively(); runOnUiThread{toast(e.message?:"Error de importación")}}
   }.start()
- }
- private fun readWord(file:File):String {
-  ZipInputStream(file.inputStream()).use { z ->
-   while(true){ val entry=z.nextEntry?:break
-    if(entry.name=="word/document.xml"){
-     val p=Xml.newPullParser(); p.setInput(z,"UTF-8"); val b=StringBuilder(); var inText=false
-     while(p.eventType!=XmlPullParser.END_DOCUMENT){
-      val n=p.name?.substringAfter(":")
-      when(p.eventType){
-       XmlPullParser.START_TAG->when(n){"t"->inText=true;"tab"->b.append('\t');"br"->b.append('\n')}
-       XmlPullParser.TEXT->if(inText)b.append(p.text)
-       XmlPullParser.END_TAG->when(n){"t"->inText=false;"p"->b.append('\n')}
-      }; p.next()
-     }; return b.toString()
-    }
-   }
-  }; error("DOCX inválido")
  }
 }

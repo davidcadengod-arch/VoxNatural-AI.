@@ -9,6 +9,7 @@ android {
   targetSdk = 35
   versionCode = 4
   versionName = "3.0-beta3"
+  testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   ndk { abiFilters += "arm64-v8a" }
  }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
@@ -16,4 +17,7 @@ android {
 }
 dependencies { implementation(files("libs/sherpa.aar")); implementation("com.tom-roush:pdfbox-android:2.0.27.0") }
 
-dependencies { testImplementation("junit:junit:4.13.2") }
+dependencies {
+ testImplementation("junit:junit:4.13.2")
+ androidTestImplementation("androidx.test.runner:1.6.2")
+}

@@ -36,22 +36,27 @@ jobs:
           curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar -o app/libs/sherpa.aar
           echo "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96  app/libs/sherpa.aar" | sha256sum -c -
           curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2 -o /tmp/kokoro.tar.bz2
+          echo "60703707bc05ccd48d60e1eb723f38b07d6e474795a0b6a588d7220400e0f7a4  /tmp/kokoro.tar.bz2" | sha256sum -c -
           tar -xjf /tmp/kokoro.tar.bz2 -C /tmp
           cp /tmp/kokoro-multi-lang-v1_0/{model.onnx,voices.bin,tokens.txt} app/src/main/assets/kokoro/
+          cp /tmp/kokoro-multi-lang-v1_0/{LICENSE,README.md} app/src/main/assets/kokoro/
           cp -r /tmp/kokoro-multi-lang-v1_0/espeak-ng-data app/src/main/assets/kokoro/
           mkdir -p app/src/main/assets/piper
           curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-davefx-medium.tar.bz2 -o /tmp/piper.tar.bz2
+          echo "a3f6beb54a9cb893279f72978a22f807a4d9fc9c7848157b524d5cc7b7f58b22  /tmp/piper.tar.bz2" | sha256sum -c -
           tar -xjf /tmp/piper.tar.bz2 -C /tmp
           P=/tmp/vits-piper-es_ES-davefx-medium
           cp "$P/es_ES-davefx-medium.onnx" app/src/main/assets/piper/model.onnx
-          cp "$P/tokens.txt" app/src/main/assets/piper/
+          cp "$P"/{tokens.txt,MODEL_CARD} app/src/main/assets/piper/
           cp -r "$P/espeak-ng-data" app/src/main/assets/piper/
           mkdir -p app/src/main/assets/supertonic
           curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 -o /tmp/supertonic.tar.bz2
+          echo "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427  /tmp/supertonic.tar.bz2" | sha256sum -c -
           tar -xjf /tmp/supertonic.tar.bz2 -C /tmp
           S=/tmp/sherpa-onnx-supertonic-3-tts-int8-2026-05-11
           cp "$S"/{duration_predictor.int8.onnx,text_encoder.int8.onnx,vector_estimator.int8.onnx,vocoder.int8.onnx,tts.json,unicode_indexer.bin,voice.bin} app/src/main/assets/supertonic/
-          curl -fL --retry 3 https://huggingface.co/Supertone/supertonic-3/resolve/main/LICENSE -o app/src/main/assets/supertonic/LICENSE
+          curl -fL --retry 3 https://huggingface.co/Supertone/supertonic-3/resolve/3cadd1ee6394adea1bd021217a0e650ede09a323/LICENSE -o app/src/main/assets/supertonic/LICENSE
+          echo "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f  app/src/main/assets/supertonic/LICENSE" | sha256sum -c -
       - name: Bundle verified PocketTTS model
         run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
       - name: Compile native MP3 encoder
@@ -62,7 +67,7 @@ jobs:
           cp THIRD_PARTY_NOTICES.md POCKET-NOTICE.md SUPERTONIC-NOTICE.md app/src/main/assets/licenses/
           gradle :app:dependencies --configuration debugRuntimeClasspath --no-daemon > compliance/runtime-dependencies.txt
           unzip -l app/libs/sherpa.aar > compliance/sherpa-archive.txt
-          find app/src/main/assets -type f \( -iname '*license*' -o -iname '*notice*' \) > compliance/license-files.txt
+          find app/src/main/assets -type f \( -iname '*license*' -o -iname '*notice*' -o -iname 'MODEL_CARD' \) > compliance/license-files.txt
           sha256sum app/libs/sherpa.aar > compliance/native-sha256.txt
           sha256sum /tmp/{kokoro,piper,supertonic}.tar.bz2 compliance/lame/lame.tar.gz > compliance/archive-sha256.txt
           find app/src/main/assets -type f -print0 | sort -z | xargs -0 sha256sum > compliance/asset-sha256.txt
@@ -98,3 +103,10 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/APK.sha256
+      - name: Build Android device tests
+        run: gradle :app:assembleDebugAndroidTest --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoxNatural-Android-device-tests
+          if-no-files-found: error
+          path: app/build/outputs/apk/androidTest/debug/*.apk
