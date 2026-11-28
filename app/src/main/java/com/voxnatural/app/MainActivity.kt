@@ -16,6 +16,14 @@ import com.tom_roush.pdfbox.text.PDFTextStripper
 
 class MainActivity : Activity() {
  private lateinit var root: LinearLayout
+ private lateinit var shell: LinearLayout
+ private lateinit var nav: LinearLayout
+ private var dark=false
+ private fun ink()=Color.parseColor(if(dark)"#F5F1E8" else "#282723")
+ private fun paper()=Color.parseColor(if(dark)"#282723" else "#F5F1E8")
+ private fun sand()=Color.parseColor(if(dark)"#393630" else "#E5DDD0")
+ private val burgundy=Color.parseColor("#743B45")
+ private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
  private lateinit var status: TextView
  private lateinit var library: LinearLayout
  private lateinit var voice: Spinner
@@ -28,11 +36,20 @@ class MainActivity : Activity() {
   super.onCreate(b)
   PDFBoxResourceLoader.init(applicationContext)
   docs=File(filesDir,"library").apply { mkdirs() }
-  root=LinearLayout(this).apply { orientation=1; setPadding(28,30,28,30); setBackgroundColor(Color.rgb(17,24,39)) }
-  setContentView(ScrollView(this).apply { addView(root) })
+  dark=getPreferences(0).getBoolean("dark",false)
+  val wide=resources.configuration.orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE
+  shell=LinearLayout(this).apply{orientation=if(wide)0 else 1;setBackgroundColor(paper())}
+  nav=LinearLayout(this).apply{orientation=if(wide)1 else 0;setBackgroundColor(sand());setPadding(dp(8),dp(8),dp(8),dp(8))}
+  root=LinearLayout(this).apply { orientation=1; setPadding(dp(20),dp(20),dp(20),dp(20)); setBackgroundColor(paper()) }
+  val scroll=ScrollView(this).apply{addView(root)}
+  if(wide){shell.addView(nav,LinearLayout.LayoutParams(dp(160),-1));shell.addView(scroll,LinearLayout.LayoutParams(0,-1,1f))}else{shell.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));shell.addView(nav,LinearLayout.LayoutParams(-1,-2))}
+  setContentView(shell)
+  button(nav,"Biblioteca"){library.requestFocus();scroll.smoothScrollTo(0,library.top)}
+  button(nav,"Conversión"){scroll.smoothScrollTo(0,0)}
+  button(nav,"Ajustes"){android.app.AlertDialog.Builder(this).setTitle("Ajustes").setItems(arrayOf(if(dark)"Modo claro" else "Modo oscuro")){_,_->getPreferences(0).edit().putBoolean("dark",!dark).apply();recreate()}.show()}
   label(root,"VoxNatural AI",30)
-  label(root,"Tu biblioteca de voz · 3.0 beta2",16)
-  button(root,"Importar PDF, Word o TXT") {
+  label(root,"Biblioteca de voz · Beta 3 en desarrollo",16)
+  button(root,"Subir") {
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain")) },10)
   }
   voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1")) }
@@ -48,8 +65,8 @@ class MainActivity : Activity() {
   render()
   if(android.os.Build.VERSION.SDK_INT>=33) requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"),99)
  }
- private fun label(parent:LinearLayout,s:String,size:Int)=TextView(this).apply { text=s; textSize=size.toFloat(); setTextColor(Color.WHITE); setPadding(0,12,0,12); parent.addView(this) }
- private fun button(parent:LinearLayout,s:String,action:()->Unit)=Button(this).apply { text=s; isAllCaps=false; setOnClickListener { action() }; parent.addView(this) }
+ private fun label(parent:LinearLayout,s:String,size:Int)=TextView(this).apply { text=s; textSize=size.toFloat(); setTextColor(ink()); if(size>=23)typeface=android.graphics.Typeface.SERIF; setPadding(0,12,0,12); parent.addView(this) }
+ private fun button(parent:LinearLayout,s:String,action:()->Unit)=Button(this).apply { text=s; isAllCaps=false; setTextColor(Color.WHITE); backgroundTintList=android.content.res.ColorStateList.valueOf(burgundy); setOnClickListener { action() }; parent.addView(this) }
  private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
  override fun onResume(){ super.onResume(); refresh.post(tick) }
  override fun onPause(){ refresh.removeCallbacks(tick); super.onPause() }
