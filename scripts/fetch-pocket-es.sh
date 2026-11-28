@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Staging only; not bundled until runtime and reference voice are validated.
+# Stage the offline PocketTTS model, license and synthetic voice reference.
 out=${1:?Specify staging directory}
 mkdir -p "$out"
-base=https://huggingface.co/alejandrocordon/hushfox-pocket-tts-es/resolve/main
+base=https://huggingface.co/alejandrocordon/hushfox-pocket-tts-es/resolve/44c6457360bdc6983d50b35e339b8473f70870f5
 cd "$out"
 curl -fL --retry 3 "$base/lm_flow.int8.onnx" -o "lm_flow.int8.onnx.tmp"
 printf '%s  %s\n' 'bb929fba3fdeec8dd7532229673273b5ea214c88581164e4587ea9ce38f96065' 'lm_flow.int8.onnx.tmp' | sha256sum -c -
@@ -27,10 +27,11 @@ curl -fL --retry 3 "$base/token_scores.json" -o "token_scores.json.tmp"
 printf '%s  %s\n' '77ee74a998f592a9e2e36f9529c29d3f479e4f56999efb29b5200beb47c26877' 'token_scores.json.tmp' | sha256sum -c -
 mv 'token_scores.json.tmp' 'token_scores.json'
 curl -fL --retry 3 "$base/LICENSE" -o LICENSE
-test -s LICENSE
+echo "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411  LICENSE" | sha256sum -c -
 
 # Licensed synthetic Kokoro reference, not a recording of a human speaker.
-curl -fL --retry 3 https://huggingface.co/lineofflight/pocket-tts-kokoro-voices/resolve/main/samples/em_alex.wav -o reference.wav
+curl -fL --retry 3 https://huggingface.co/lineofflight/pocket-tts-kokoro-voices/resolve/e430d39794bfb25f8f7ad099d3c9f594947ff00e/samples/em_alex.wav -o reference.wav
+echo "3188fe720997f9212a7b3909734b5d04da30696c2670f06b172fc6cf2cf2ca84  reference.wav" | sha256sum -c -
 python3 - <<'PY'
 import wave
 with wave.open("reference.wav","rb") as f:
@@ -49,7 +50,7 @@ PY
 sha256sum reference.wav > reference.sha256
 cat > VOICE-NOTICE.txt <<'EOF'
 Alex (em_alex): synthetic output of hexgrad/Kokoro-82M (Apache-2.0), distributed for PocketTTS by lineofflight/pocket-tts-kokoro-voices (CC BY 4.0).
-https://huggingface.co/lineofflight/pocket-tts-kokoro-voices
+https://huggingface.co/lineofflight/pocket-tts-kokoro-voices/blob/e430d39794bfb25f8f7ad099d3c9f594947ff00e/samples/em_alex.wav
 https://huggingface.co/hexgrad/Kokoro-82M
 https://creativecommons.org/licenses/by/4.0/
 Reference repeated with a short pause when necessary; generated narration is synthetic, not a genuine human recording.

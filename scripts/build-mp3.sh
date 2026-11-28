@@ -25,6 +25,7 @@ TOOL="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 curl -fL --retry 3 https://downloads.sourceforge.net/lame/lame-3.100.tar.gz -o "$WORK/lame.tar.gz"
+echo "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e  $WORK/lame.tar.gz" | sha256sum -c -
 tar -xzf "$WORK/lame.tar.gz" -C "$WORK"
 cd "$WORK/lame-3.100"
 export CC="$TOOL/aarch64-linux-android26-clang" AR="$TOOL/llvm-ar" RANLIB="$TOOL/llvm-ranlib" STRIP="$TOOL/llvm-strip"
