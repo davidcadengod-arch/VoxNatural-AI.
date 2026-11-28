@@ -35,7 +35,16 @@ python3 - <<'PY'
 import wave
 with wave.open("reference.wav","rb") as f:
     assert f.getnchannels()==1 and f.getsampwidth()==2 and 16000<=f.getframerate()<=48000
-    assert 3<=f.getnframes()/f.getframerate()<=20
+    rate=f.getframerate()
+    frames=f.readframes(f.getnframes())
+    duration=len(frames)/(2*rate)
+    print("Reference duration:",duration,"sample rate:",rate)
+    assert 1<=duration<=20
+if duration<3:
+    import math
+    frames=(frames+bytes(2*(rate//5)))*math.ceil(3/(duration+0.2))
+    with wave.open("reference.wav","wb") as f:
+        f.setnchannels(1); f.setsampwidth(2); f.setframerate(rate); f.writeframes(frames)
 PY
 sha256sum reference.wav > reference.sha256
 cat > VOICE-NOTICE.txt <<'EOF'
@@ -43,5 +52,5 @@ Alex (em_alex): synthetic output of hexgrad/Kokoro-82M (Apache-2.0), distributed
 https://huggingface.co/lineofflight/pocket-tts-kokoro-voices
 https://huggingface.co/hexgrad/Kokoro-82M
 https://creativecommons.org/licenses/by/4.0/
-Unmodified reference sample; generated narration is synthetic, not a genuine human recording.
+Reference repeated with a short pause when necessary; generated narration is synthetic, not a genuine human recording.
 EOF
