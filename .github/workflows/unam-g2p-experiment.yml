@@ -44,6 +44,13 @@ jobs:
                   print('UNAM source:',str(f),src.stat().st_size)
           Path('evidence/source-sha256.txt').write_text('\n'.join(manifest)+'\n')
           assert manifest
+          print('UNAM project URLs:',d.metadata.get_all('Project-URL'),flush=True)
+          from unam_g2p import IPA29
+          import json
+          corpus="casa queso guerra guitarra pingüino mañana niño acción corazón médico anestesiología hipertensión diabetes rápidamente camión árbol lápiz reloj ciudad país raíz aire agua ruido buey llegar lluvia carro caro examen éxito México psicología recuperación".split()
+          fixtures={word:IPA29(word) for word in corpus}
+          Path('evidence/phonetic-fixtures.json').write_text(json.dumps(fixtures,ensure_ascii=False,indent=2))
+          print('UNAM reference fixtures:',json.dumps(fixtures,ensure_ascii=False),flush=True)
           for f in d.files:
               if 'license' in str(f).lower() or 'notice' in str(f).lower():
                   Path('evidence',f.name).write_bytes(d.locate_file(f).read_bytes())
