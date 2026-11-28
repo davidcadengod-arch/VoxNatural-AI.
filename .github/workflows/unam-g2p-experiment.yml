@@ -32,6 +32,18 @@ jobs:
           print(d.metadata.get('License-Expression'),d.requires)
           assert d.metadata.get('License-Expression')=='Apache-2.0'
           from pathlib import Path
+          import hashlib
+          manifest=[]
+          for f in d.files:
+              if str(f).endswith('.py'):
+                  src=d.locate_file(f)
+                  dest=Path('evidence/source')/str(f)
+                  dest.parent.mkdir(parents=True,exist_ok=True)
+                  dest.write_bytes(src.read_bytes())
+                  manifest.append(hashlib.sha256(src.read_bytes()).hexdigest()+'  '+str(f))
+                  print('UNAM source:',str(f),src.stat().st_size)
+          Path('evidence/source-sha256.txt').write_text('\n'.join(manifest)+'\n')
+          assert manifest
           for f in d.files:
               if 'license' in str(f).lower() or 'notice' in str(f).lower():
                   Path('evidence',f.name).write_bytes(d.locate_file(f).read_bytes())
