@@ -1,4 +1,4 @@
-name: Experimental Android runtime 2.0.1
+name: Experimental Android runtime 2.0.1 with UNAM
 on:
   push:
     branches: [main]
@@ -41,7 +41,6 @@ jobs:
           tar -xjf /tmp/kokoro.tar.bz2 -C /tmp
           cp /tmp/kokoro-multi-lang-v1_0/{model.onnx,voices.bin,tokens.txt} app/src/main/assets/kokoro/
           cp /tmp/kokoro-multi-lang-v1_0/{LICENSE,README.md} app/src/main/assets/kokoro/
-          cp -r /tmp/kokoro-multi-lang-v1_0/espeak-ng-data app/src/main/assets/kokoro/
           mkdir -p app/src/main/assets/piper
           curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-davefx-medium.tar.bz2 -o /tmp/piper.tar.bz2
           echo "a3f6beb54a9cb893279f72978a22f807a4d9fc9c7848157b524d5cc7b7f58b22  /tmp/piper.tar.bz2" | sha256sum -c -
@@ -49,7 +48,6 @@ jobs:
           P=/tmp/vits-piper-es_ES-davefx-medium
           cp "$P/es_ES-davefx-medium.onnx" app/src/main/assets/piper/model.onnx
           cp "$P"/{tokens.txt,MODEL_CARD} app/src/main/assets/piper/
-          cp -r "$P/espeak-ng-data" app/src/main/assets/piper/
           mkdir -p app/src/main/assets/supertonic
           curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 -o /tmp/supertonic.tar.bz2
           echo "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427  /tmp/supertonic.tar.bz2" | sha256sum -c -
@@ -68,6 +66,10 @@ jobs:
             readelf -Ws "$f" | grep -Ei 'espeak|phonemize' || true
             strings "$f" | grep -Ei 'espeak|piper.phonemize' | head -50 || true
           done > compliance/native-inspection.txt
+          if grep -E 'espeak-ng-data|/tmp/espeak|espeak_Initialize' compliance/native-inspection.txt; then
+            echo "Unexpected eSpeak marker in the UNAM runtime"
+            exit 1
+          fi
       - name: Bundle verified PocketTTS model
         run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
       - name: Compile native MP3 encoder
@@ -76,7 +78,7 @@ jobs:
         run: |
           mkdir -p compliance app/src/main/assets/licenses
           cp THIRD_PARTY_NOTICES.md POCKET-NOTICE.md SUPERTONIC-NOTICE.md app/src/main/assets/licenses/
-          gradle :app:dependencies --configuration debugRuntimeClasspath --no-daemon > compliance/runtime-dependencies.txt
+          gradle -PvoxPhonemizer=unam :app:dependencies --configuration debugRuntimeClasspath --no-daemon > compliance/runtime-dependencies.txt
           unzip -l app/libs/sherpa.aar > compliance/sherpa-archive.txt
           find app/src/main/assets -type f \( -iname '*license*' -o -iname '*notice*' -o -iname 'MODEL_CARD' \) > compliance/license-files.txt
           sha256sum app/libs/sherpa.aar > compliance/native-sha256.txt
@@ -89,7 +91,7 @@ jobs:
             readelf -d "$library"
           done > compliance/native-arm64.txt
           rm -r compliance/android-native
-      - run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
+      - run: gradle -PvoxPhonemizer=unam :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: experimental-runtime-compliance
@@ -99,7 +101,7 @@ jobs:
           APK=app/build/outputs/apk/debug/app-debug.apk
           TOOLS="$ANDROID_HOME/build-tools/35.0.0"
           "$TOOLS/apksigner" verify "$APK"
-          python3 scripts/verify-apk.py "$APK"
+          python3 scripts/verify-apk.py "$APK" --phonemizer unam
           (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" > APK.sha256)
       - name: Upload JVM test results
         if: ${{ !cancelled() }}
@@ -114,3 +116,8 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/APK.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoxNatural-UNAM-device-tests
+          if-no-files-found: error
+          path: app/build/outputs/apk/androidTest/debug/*.apk

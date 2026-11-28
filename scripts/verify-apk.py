@@ -34,7 +34,7 @@ MODELS = {
 }
 
 
-def verify(path: Path) -> None:
+def verify(path: Path, phonemizer: str) -> None:
     required = {
         f"assets/{engine}/{filename}"
         for engine, filenames in MODELS.items()
@@ -60,7 +60,12 @@ def verify(path: Path) -> None:
         }
         if abis != {"arm64-v8a"}:
             raise ValueError(f"Unexpected native ABIs: {sorted(abis)}")
-        for engine in ("kokoro", "piper"):
+        if phonemizer == "unam":
+            if not entries.get("assets/licenses/UNAM-G2P-APACHE-2.0.txt"):
+                raise ValueError("Missing UNAM-G2P license")
+            if any("/espeak-ng-data/" in name for name in entries):
+                raise ValueError("The UNAM APK must exclude eSpeak data")
+        for engine in ("kokoro", "piper") if phonemizer == "legacy" else ():
             data = f"assets/{engine}/espeak-ng-data/"
             if not any(name.startswith(data) and size for name, size in entries.items()):
                 raise ValueError(f"Missing phonemizer data for {engine}")
@@ -73,4 +78,6 @@ def verify(path: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("apk", type=Path)
-    verify(parser.parse_args().apk)
+    parser.add_argument("--phonemizer", choices=("legacy", "unam"), default="legacy")
+    args = parser.parse_args()
+    verify(args.apk, args.phonemizer)

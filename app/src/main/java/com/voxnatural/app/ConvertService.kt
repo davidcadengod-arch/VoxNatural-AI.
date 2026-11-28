@@ -89,7 +89,8 @@ class ConvertService:Service(){
   try{
    val text=Pronunciation(this).apply(File(folder,"text").readText())
    val (chunks, pauses)=segmentNeuralText(text)
-   val parts=File(folder,"neural-parts-"+sid+"-v7").apply{mkdirs()}
+   val cacheVersion=if(USES_ESPEAK_DATA) "v7" else "unam-v1"
+   val parts=File(folder,"neural-parts-"+sid+"-"+cacheVersion).apply{mkdirs()}
    val signature=File(parts,"signature")
    val reference=if(sid==300) NeuralVoice.loadReference(this) else null
    val key=ConversionIdentity.key(text,reference)

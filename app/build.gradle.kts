@@ -1,5 +1,11 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+val phonemizer = providers.gradleProperty("voxPhonemizer").orElse("legacy").get()
+require(phonemizer in setOf("legacy", "unam")) { "Unknown phonemizer: $phonemizer" }
+
 android {
+ sourceSets.named("main") {
+  java.srcDir("src/$phonemizer/java")
+ }
  namespace = "com.voxnatural.app"
  compileSdk = 35
  androidResources { noCompress.addAll(listOf("onnx", "bin")) }
