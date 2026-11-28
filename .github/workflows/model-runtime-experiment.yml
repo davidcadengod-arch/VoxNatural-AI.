@@ -1,0 +1,68 @@
+name: Experimental model compatibility
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/model-runtime-experiment.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [supertonic, kokoro, piper]
+        runtime: ['1.13.8', '2.0.1']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install sherpa-onnx==${{ matrix.runtime }} numpy
+      - name: Fetch model and synthesize
+        env:
+          MODEL: ${{ matrix.model }}
+        run: |
+          case "$MODEL" in
+            supertonic) archive=sherpa-onnx-supertonic-3-tts-int8-2026-05-11 ;;
+            kokoro) archive=kokoro-multi-lang-v1_0 ;;
+            piper) archive=vits-piper-es_ES-davefx-medium ;;
+          esac
+          curl -fL --retry 3 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$archive.tar.bz2" -o /tmp/model.tar.bz2
+          tar -xjf /tmp/model.tar.bz2
+          export MODEL_DIR="$PWD/$archive"
+          python - <<'PY'
+          import os, wave, numpy as np, sherpa_onnx as s
+          from pathlib import Path
+          p=Path(os.environ["MODEL_DIR"])
+          kind=os.environ["MODEL"]
+          def f(n): return str(p/n)
+          if kind=="supertonic":
+              model=s.OfflineTtsModelConfig(supertonic=s.OfflineTtsSupertonicModelConfig(duration_predictor=f("duration_predictor.int8.onnx"),text_encoder=f("text_encoder.int8.onnx"),vector_estimator=f("vector_estimator.int8.onnx"),vocoder=f("vocoder.int8.onnx"),tts_json=f("tts.json"),unicode_indexer=f("unicode_indexer.bin"),voice_style=f("voice.bin")),num_threads=4,provider="cpu")
+          elif kind=="kokoro":
+              model=s.OfflineTtsModelConfig(kokoro=s.OfflineTtsKokoroModelConfig(model=f("model.onnx"),voices=f("voices.bin"),tokens=f("tokens.txt"),data_dir=f("espeak-ng-data"),lang="es"),num_threads=4,provider="cpu")
+          else:
+              model=s.OfflineTtsModelConfig(vits=s.OfflineTtsVitsModelConfig(model=f("es_ES-davefx-medium.onnx"),tokens=f("tokens.txt"),data_dir=f("espeak-ng-data")),num_threads=4,provider="cpu")
+          tts=s.OfflineTts(s.OfflineTtsConfig(model=model))
+          text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado?"
+          if kind=="supertonic":
+              cfg=s.GenerationConfig()
+              cfg.sid=0
+              cfg.num_steps=8
+              cfg.extra={"lang":"es"}
+              audio=tts.generate(text,cfg)
+          else:
+              audio=tts.generate(text,sid=28 if kind=="kokoro" else 0,speed=0.97)
+          a=np.asarray(audio.samples)
+          assert a.size>audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
+          with wave.open("sample.wav","wb") as out:
+              out.setnchannels(1);out.setsampwidth(2);out.setframerate(audio.sample_rate)
+              out.writeframes((np.clip(a,-1,1)*32767).astype("<i2").tobytes())
+          print(kind,a.size,audio.sample_rate)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sample-${{ matrix.model }}-${{ matrix.runtime }}
+          path: sample.wav

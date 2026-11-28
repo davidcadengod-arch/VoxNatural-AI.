@@ -1,0 +1,90 @@
+name: Experimental Android runtime 2.0.1
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/android-runtime-experiment.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Fetch pinned neural runtime and model
+        run: |
+          mkdir -p app/libs app/src/main/assets/kokoro
+          curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-2.0.1.aar -o app/libs/sherpa.aar
+          curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2 -o /tmp/kokoro.tar.bz2
+          tar -xjf /tmp/kokoro.tar.bz2 -C /tmp
+          cp /tmp/kokoro-multi-lang-v1_0/{model.onnx,voices.bin,tokens.txt} app/src/main/assets/kokoro/
+          cp -r /tmp/kokoro-multi-lang-v1_0/espeak-ng-data app/src/main/assets/kokoro/
+          mkdir -p app/src/main/assets/piper
+          curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-es_ES-davefx-medium.tar.bz2 -o /tmp/piper.tar.bz2
+          tar -xjf /tmp/piper.tar.bz2 -C /tmp
+          P=/tmp/vits-piper-es_ES-davefx-medium
+          cp "$P/es_ES-davefx-medium.onnx" app/src/main/assets/piper/model.onnx
+          cp "$P/tokens.txt" app/src/main/assets/piper/
+          cp -r "$P/espeak-ng-data" app/src/main/assets/piper/
+          mkdir -p app/src/main/assets/supertonic
+          curl -fL --retry 3 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2 -o /tmp/supertonic.tar.bz2
+          tar -xjf /tmp/supertonic.tar.bz2 -C /tmp
+          S=/tmp/sherpa-onnx-supertonic-3-tts-int8-2026-05-11
+          cp "$S"/{duration_predictor.int8.onnx,text_encoder.int8.onnx,vector_estimator.int8.onnx,vocoder.int8.onnx,tts.json,unicode_indexer.bin,voice.bin} app/src/main/assets/supertonic/
+          curl -fL --retry 3 https://huggingface.co/Supertone/supertonic-3/resolve/main/LICENSE -o app/src/main/assets/supertonic/LICENSE
+      - name: Inspect native runtime
+        run: |
+          mkdir -p compliance
+          unzip -q app/libs/sherpa.aar -d /tmp/runtime-aar
+          find /tmp/runtime-aar -name '*.so' -print | while read -r f; do
+            echo "$f"
+            readelf -d "$f"
+            readelf -Ws "$f" | grep -Ei 'espeak|phonemize' || true
+            strings "$f" | grep -Ei 'espeak|piper.phonemize' | head -50 || true
+          done > compliance/native-inspection.txt
+      - name: Bundle verified PocketTTS model
+        run: bash scripts/fetch-pocket-es.sh app/src/main/assets/pocket
+      - name: Compile native MP3 encoder
+        run: bash scripts/build-mp3.sh
+      - name: Collect dependency and license evidence
+        run: |
+          mkdir -p compliance app/src/main/assets/licenses
+          cp THIRD_PARTY_NOTICES.md POCKET-NOTICE.md SUPERTONIC-NOTICE.md app/src/main/assets/licenses/
+          gradle :app:dependencies --configuration debugRuntimeClasspath --no-daemon > compliance/runtime-dependencies.txt
+          unzip -l app/libs/sherpa.aar > compliance/sherpa-archive.txt
+          find app/src/main/assets -type f -iname '*license*' -o -iname '*notice*' > compliance/license-files.txt
+          sha256sum app/libs/sherpa.aar > compliance/native-sha256.txt
+      - run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: experimental-runtime-compliance
+          path: compliance/
+      - name: Verify APK
+        run: |
+          unzip -t app/build/outputs/apk/debug/app-debug.apk >/dev/null
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          unzip -l "$APK" | grep libvoxmp3.so
+          for f in duration_predictor.int8.onnx text_encoder.int8.onnx vector_estimator.int8.onnx vocoder.int8.onnx tts.json unicode_indexer.bin voice.bin LICENSE; do
+            unzip -p "$APK" "assets/supertonic/$f" > /tmp/verify-model
+            test -s /tmp/verify-model
+          done
+          for f in assets/kokoro/model.onnx assets/kokoro/voices.bin assets/piper/model.onnx; do
+            unzip -p "$APK" "$f" > /tmp/verify-model
+            test -s /tmp/verify-model
+          done
+          for f in lm_flow.int8.onnx lm_main.int8.onnx encoder.onnx decoder.int8.onnx text_conditioner.onnx vocab.json token_scores.json reference.wav VOICE-NOTICE.txt LICENSE; do
+            unzip -p "$APK" "assets/pocket/$f" > /tmp/verify-model
+            test -s /tmp/verify-model
+          done
+          rm -f /tmp/verify-model
+      - uses: actions/upload-artifact@v4
+        with:
+          name: experimental-android-runtime-2
+          path: app/build/outputs/apk/debug/app-debug.apk
