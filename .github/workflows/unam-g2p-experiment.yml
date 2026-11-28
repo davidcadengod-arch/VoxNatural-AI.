@@ -69,7 +69,7 @@ jobs:
                   phones=[]
                   for token in IPA29(word).split():
                       if token in ('.','/'): continue
-                      token={'ʧ':'tʃ','ʤ':'dʒ'}.get(token,token)
+                      token={'ʧ':'tʃ','ʤ':'dʒ'}.get(token,token).replace('g','ɡ') if 'ɡ' in vocab else {'ʧ':'tʃ','ʤ':'dʒ'}.get(token,token)
                       base=unicodedata.normalize('NFD',token)
                       if '\u0301' in base:
                           phones.append('ˈ'); token=base.replace('\u0301','')
