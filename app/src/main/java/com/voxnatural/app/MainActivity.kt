@@ -35,13 +35,13 @@ class MainActivity : Activity() {
   button(root,"Importar PDF, Word o TXT") {
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain")) },10)
   }
-  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android")) }
+  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1")) }
   root.addView(voice)
   status=label(root,"Selecciona un documento",16)
   button(root,"Convertir a audio") {
    val f=selected
    if(f==null) toast("Primero selecciona un documento")
-   else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,100,-1)[voice.selectedItemPosition]))
+   else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,100,-1,200,205)[voice.selectedItemPosition]))
   }
   label(root,"Mi biblioteca",23)
   library=LinearLayout(this).apply { orientation=1 }; root.addView(library)
@@ -59,7 +59,7 @@ class MainActivity : Activity() {
   library.removeAllViews()
   docs.listFiles()?.filter { File(it,"name").isFile }?.sortedByDescending { it.lastModified() }?.forEach { f ->
    button(library,(if(selected==f) "✓ " else "")+File(f,"name").readText()){ selected=f; render(); showStatus() }
-   val voices=linkedMapOf(28 to "Dora",29 to "Alex",53 to "Santa",100 to "DaveFX",-1 to "Android")
+   val voices=linkedMapOf(28 to "Dora",29 to "Alex",53 to "Santa",100 to "DaveFX",-1 to "Android",200 to "Supertonic F1",205 to "Supertonic M1")
    for((sid,label) in voices) for(ext in listOf("mp3","wav")){
     val audio=File(f,"audio-"+sid+"."+ext)
     if(audio.isFile) button(library,"Guardar "+label+" · "+ext.uppercase()){
