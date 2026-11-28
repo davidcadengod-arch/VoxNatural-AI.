@@ -128,10 +128,10 @@ class ConvertService:Service(){
      report((when(sid){100->"Piper: ";in 200..209->"Supertonic: ";else->"Kokoro: "})+(index+1)+" de "+chunks.size)
      val f=File(parts,index.toString()+".wav")
      val done=File(parts,index.toString()+".done")
-     if(done.isFile && f.length()>44)continue
+     if(done.isFile && validNeuralWav(f))continue
      done.delete();f.delete()
      voice.generate(chunk,f)
-     require(f.length()>44);done.writeText("ok")
+     require(validNeuralWav(f)){"Fragmento WAV inválido"};done.writeText("ok")
     }
    }
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio-"+sid+".wav"),pauses)
@@ -139,6 +139,33 @@ class ConvertService:Service(){
   }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
+ // Validate cached PCM before reuse; reject truncated or empty data chunks.
+ private fun validNeuralWav(file:File):Boolean = try {
+  RandomAccessFile(file,"r").use { src ->
+   fun tag():String { val a=ByteArray(4);src.readFully(a);return String(a,Charsets.US_ASCII) }
+   fun uint():Long = Integer.reverseBytes(src.readInt()).toLong() and 0xffffffffL
+   require(tag()=="RIFF")
+   val end=uint()+8
+   require(end==src.length() && tag()=="WAVE")
+   var align=0
+   var data=0L
+   while(src.filePointer+8<=end){
+    val type=tag();val n=uint();val next=src.filePointer+n+(n%2)
+    require(next<=end)
+    if(type=="fmt "){
+     require(n>=16)
+     val a=ByteArray(16);src.readFully(a)
+     val fmt=java.nio.ByteBuffer.wrap(a).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+     require(fmt.getShort(0).toInt()==1 && fmt.getShort(2).toInt()==1 && fmt.getShort(14).toInt()==16)
+     require(fmt.getInt(4) in 8000..192000)
+     align=fmt.getShort(12).toInt()
+     require(align==2)
+    }else if(type=="data"){require(align>0 && n>0 && n%align==0L);data+=n}
+    src.seek(next)
+   }
+   src.filePointer==end && data>0 && align==2
+  }
+ }catch(e:Exception){false}
  private fun merge(files:List<File>,out:File,pauses:List<Int> = emptyList()){
   val tmp=File(out.parentFile,"audio.tmp")
   var format:ByteArray?=null
