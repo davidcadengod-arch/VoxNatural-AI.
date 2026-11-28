@@ -103,7 +103,7 @@ jobs:
                   units=re.findall(r'[^\W\d_]+|[^\w\s]|\s+',normalized)
                   phonemes="".join("".join(entries[u]) if u in entries else (" " if u.isspace() else u) for u in units)
                   print("Piper phonemes:",repr(phonemes),flush=True)
-                  cfg.phoneme_codepoints=[ord(c) for c in phonemes]
+                  cfg.phoneme_codepoints=[[ord(c) for c in phonemes]]
                   audio=tts.generate(normalized,cfg)
               else:
                   audio=tts.generate(text,sid=28,speed=0.97)
