@@ -26,7 +26,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
   if(!piper && sid !in 0 until tts.numSpeakers()){tts.release();error("Voz no disponible en el modelo")}
  }
  fun generate(text:String,out:File){
-  val audio=tts.generate(text,if(piper)0 else sid,1.0f)
+  val audio=tts.generate(text,if(piper)0 else sid,if(piper) 0.95f else 0.92f)
   require(audio.samples.isNotEmpty() && audio.samples.all{it.isFinite()}){"Audio neuronal inválido"}
   require(audio.save(out.absolutePath)){"No se pudo guardar el fragmento"}
  }

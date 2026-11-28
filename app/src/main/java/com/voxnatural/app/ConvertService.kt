@@ -85,16 +85,37 @@ class ConvertService:Service(){
  private fun convertNeural(folder:File,sid:Int){
   try{
    val text=File(folder,"text").readText()
+   val normalized=text.replace("\r\n","\n").replace('\r','\n')
    val chunks=mutableListOf<String>()
-   var pos=0
-   while(pos<text.length){
-    var end=minOf(pos+200,text.length)
-    if(end<text.length){val sentence=text.lastIndexOfAny(charArrayOf('.','!','?','\n'),end-1);val cut=text.lastIndexOfAny(charArrayOf(' ','\n'),end-1);if(sentence>pos+60)end=sentence+1 else if(cut>pos)end=cut+1}
-    if(end<text.length && Character.isHighSurrogate(text[end-1]))end--
-    val part=text.substring(pos,end).trim();if(part.isNotEmpty())chunks.add(part);pos=end
+   val breaks=java.text.BreakIterator.getSentenceInstance(Locale("es"))
+   for(paragraph in normalized.split(Regex("\\n\\s*\\n"))){
+    val clean=paragraph.replace(Regex("\\s+")," ").trim()
+    if(clean.isEmpty())continue
+    breaks.setText(clean)
+    var begin=breaks.first()
+    var finish=breaks.next()
+    while(finish!=java.text.BreakIterator.DONE){
+     var pos=begin
+     while(pos<finish){
+      var end=minOf(pos+240,finish)
+      if(end<finish){
+       val clause=clean.lastIndexOfAny(charArrayOf(';',':',','),end-1)
+       val space=clean.lastIndexOf(' ',end-1)
+       if(clause>pos+100)end=clause+1 else if(space>pos)end=space+1
+       if(Character.isHighSurrogate(clean[end-1]))end--
+      }
+      val part=clean.substring(pos,end).trim()
+      if(part.isNotEmpty())chunks.add(part)
+      pos=end
+     }
+     begin=finish;finish=breaks.next()
+    }
    }
    require(chunks.isNotEmpty())
-   val parts=File(folder,"neural-parts-"+sid+"-v2").apply{mkdirs()}
+   val parts=File(folder,"neural-parts-"+sid+"-v3").apply{mkdirs()}
+   val signature=File(parts,"signature")
+   val key=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
+   if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
      report((if(sid==100)"Piper: " else "Kokoro: ")+(index+1)+" de "+chunks.size)
