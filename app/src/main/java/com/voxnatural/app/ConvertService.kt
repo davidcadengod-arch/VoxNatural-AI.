@@ -120,7 +120,7 @@ class ConvertService:Service(){
     else if(pauses.isNotEmpty())pauses[pauses.lastIndex]=240
    }
    require(chunks.isNotEmpty())
-   val parts=File(folder,"neural-parts-"+sid+"-v5").apply{mkdirs()}
+   val parts=File(folder,"neural-parts-"+sid+"-v6").apply{mkdirs()}
    val signature=File(parts,"signature")
    val key=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}

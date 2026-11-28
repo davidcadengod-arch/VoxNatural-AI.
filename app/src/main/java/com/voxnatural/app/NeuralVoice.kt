@@ -36,6 +36,16 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
   }
   val audio=tts.generate(text,if(piper)0 else sid,speed)
   require(audio.samples.isNotEmpty() && audio.samples.all{it.isFinite()}){"Audio neuronal inválido"}
+  // Preserve dynamics: attenuate only peaks that risk clipping, with short edge fades.
+  val samples=audio.samples
+  val peak=samples.maxOf{ kotlin.math.abs(it) }
+  val peakLimit=0.98f
+  val gain=if(peak>peakLimit)peakLimit/peak else 1f
+  val fade=minOf(audio.sampleRate/200,samples.size/2)
+  for(i in samples.indices){
+   val edge=if(fade>0)minOf(1f,i.toFloat()/fade,(samples.lastIndex-i).toFloat()/fade) else 1f
+   samples[i]*=gain*edge
+  }
   require(audio.save(out.absolutePath)){"No se pudo guardar el fragmento"}
  }
  override fun close(){tts.release()}
