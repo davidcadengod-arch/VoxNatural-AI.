@@ -127,10 +127,7 @@ class ConvertService:Service(){
    val parts=File(folder,"neural-parts-"+sid+"-v7").apply{mkdirs()}
    val signature=File(parts,"signature")
    val reference=if(sid==300) NeuralVoice.loadReference(this) else null
-   val digest=java.security.MessageDigest.getInstance("SHA-256")
-   digest.update(text.toByteArray(Charsets.UTF_8))
-   if(reference!=null){val bytes=java.nio.ByteBuffer.allocate(4+reference.first.size*4);bytes.putInt(reference.second);reference.first.forEach{bytes.putFloat(it)};digest.update(bytes.array())}
-   val key=digest.digest().joinToString(""){"%02x".format(it.toInt() and 255)}
+   val key=ConversionIdentity.key(text,reference)
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
    File(parts,"chunks.json").writeText(org.json.JSONArray(chunks).toString())
    if(fragment>=0){require(fragment in chunks.indices){"Fragmento inexistente"};require(chunks.indices.all{File(parts,it.toString()+".done").isFile && validNeuralWav(File(parts,it.toString()+".wav"))}){"Primero completa la conversión con la configuración actual"};File(parts,fragment.toString()+".done").delete()}
