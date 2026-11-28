@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: ['scripts/fetch-pocket-es.sh', '.github/workflows/pocket-validation.yml']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

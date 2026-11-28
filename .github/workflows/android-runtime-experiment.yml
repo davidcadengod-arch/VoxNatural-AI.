@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/android-runtime-experiment.yml']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,6 +20,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Ensure Android SDK 35 is available
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Fetch pinned neural runtime and model
         run: |
           mkdir -p app/libs app/src/main/assets/kokoro
@@ -66,25 +70,23 @@ jobs:
         with:
           name: experimental-runtime-compliance
           path: compliance/
-      - name: Verify APK
+      - name: Verify ARM64 APK
         run: |
-          unzip -t app/build/outputs/apk/debug/app-debug.apk >/dev/null
           APK=app/build/outputs/apk/debug/app-debug.apk
-          unzip -l "$APK" | grep libvoxmp3.so
-          for f in duration_predictor.int8.onnx text_encoder.int8.onnx vector_estimator.int8.onnx vocoder.int8.onnx tts.json unicode_indexer.bin voice.bin LICENSE; do
-            unzip -p "$APK" "assets/supertonic/$f" > /tmp/verify-model
-            test -s /tmp/verify-model
-          done
-          for f in assets/kokoro/model.onnx assets/kokoro/voices.bin assets/piper/model.onnx; do
-            unzip -p "$APK" "$f" > /tmp/verify-model
-            test -s /tmp/verify-model
-          done
-          for f in lm_flow.int8.onnx lm_main.int8.onnx encoder.onnx decoder.int8.onnx text_conditioner.onnx vocab.json token_scores.json reference.wav VOICE-NOTICE.txt LICENSE; do
-            unzip -p "$APK" "assets/pocket/$f" > /tmp/verify-model
-            test -s /tmp/verify-model
-          done
-          rm -f /tmp/verify-model
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify "$APK"
+          python3 scripts/verify-apk.py "$APK"
+          (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" > APK.sha256)
+      - name: Upload JVM test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-tests
+          path: app/build/test-results/testDebugUnitTest/*.xml
       - uses: actions/upload-artifact@v4
         with:
           name: experimental-android-runtime-2
-          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/APK.sha256
