@@ -24,6 +24,41 @@ class MainActivity : Activity() {
  private fun sand()=Color.parseColor(if(dark)"#393630" else "#E5DDD0")
  private val burgundy=Color.parseColor("#743B45")
  private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
+ private var player: android.media.MediaPlayer?=null
+ private var playingFile:File?=null
+ private lateinit var mini:LinearLayout
+ private lateinit var miniTitle:TextView
+ private lateinit var miniToggle:Button
+ private fun titleOf(f:File)=File(f,"title").takeIf{it.isFile}?.readText()?.takeIf{it.isNotBlank()}?:File(f,"name").readText().substringBeforeLast(".")
+ private fun authorOf(f:File)=File(f,"author").takeIf{it.isFile}?.readText()?.takeIf{it.isNotBlank()}?:"Autor desconocido"
+ private fun editBook(f:File){
+  val fields=LinearLayout(this).apply{orientation=1}
+  val title=EditText(this).apply{setText(titleOf(f));hint="Título"};fields.addView(title)
+  val author=EditText(this).apply{setText(authorOf(f));hint="Autor"};fields.addView(author)
+  android.app.AlertDialog.Builder(this).setTitle("Editar libro").setView(fields).setPositiveButton("Guardar"){_,_->File(f,"title").writeText(title.text.toString());File(f,"author").writeText(author.text.toString());render()}.setNegativeButton("Cancelar",null).show()
+ }
+ private fun playAudio(f:File){
+  try{
+   savePlayback();player?.release();player=null
+   val m=android.media.MediaPlayer();player=m;playingFile=f
+   m.setDataSource(f.absolutePath);m.prepare()
+   m.seekTo(getPreferences(0).getInt("audio:"+f.absolutePath,0).coerceIn(0,m.duration))
+   m.start();updateMini()
+  }catch(e:Exception){player?.release();player=null;playingFile=null;toast(e.message?:"No se pudo reproducir");updateMini()}
+ }
+ private fun savePlayback(){try{val f=playingFile;val m=player;if(f!=null&&m!=null)getPreferences(0).edit().putInt("audio:"+f.absolutePath,m.currentPosition).apply()}catch(_:Exception){}}
+ private fun toggleAudio(){try{player?.let{if(it.isPlaying)it.pause() else it.start()};updateMini()}catch(e:Exception){toast("Audio no disponible")}}
+ private fun updateMini(){if(!::mini.isInitialized)return;val f=playingFile;val m=player;mini.visibility=if(f==null)android.view.View.GONE else android.view.View.VISIBLE;miniTitle.text=if(f==null)"" else titleOf(f.parentFile!!)+" · "+f.name;miniToggle.text=if(m?.isPlaying==true)"Pausa" else "Reproducir"}
+ private fun playerDialog(){
+  val m=player?:run{toast("Selecciona un audio de la biblioteca");return}
+  val panel=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(16),dp(16),dp(16))}
+  label(panel,playingFile?.parentFile?.let{titleOf(it)}?:"Audio",23)
+  val seek=SeekBar(this).apply{max=m.duration;progress=m.currentPosition;setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(s:SeekBar?,p:Int,fromUser:Boolean){if(fromUser)m.seekTo(p)};override fun onStartTrackingTouch(s:SeekBar?){};override fun onStopTrackingTouch(s:SeekBar?) {}})};panel.addView(seek)
+  button(panel,"Reproducir / pausa"){toggleAudio()}
+  button(panel,"Retroceder 15 s"){m.seekTo((m.currentPosition-15000).coerceAtLeast(0));seek.progress=m.currentPosition}
+  button(panel,"Avanzar 15 s"){m.seekTo((m.currentPosition+15000).coerceAtMost(m.duration));seek.progress=m.currentPosition}
+  android.app.AlertDialog.Builder(this).setTitle("Reproductor").setView(panel).setPositiveButton("Cerrar",null).show()
+ }
  private lateinit var status: TextView
  private lateinit var library: LinearLayout
  private lateinit var voice: Spinner
@@ -43,8 +78,10 @@ class MainActivity : Activity() {
   root=LinearLayout(this).apply { orientation=1; setPadding(dp(20),dp(20),dp(20),dp(20)); setBackgroundColor(paper()) }
   val scroll=ScrollView(this).apply{addView(root)}
   if(wide){shell.addView(nav,LinearLayout.LayoutParams(dp(160),-1));shell.addView(scroll,LinearLayout.LayoutParams(0,-1,1f))}else{shell.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));shell.addView(nav,LinearLayout.LayoutParams(-1,-2))}
-  setContentView(shell)
+  val outer=LinearLayout(this).apply{orientation=1;setBackgroundColor(paper())};outer.addView(shell,LinearLayout.LayoutParams(-1,0,1f))
+  mini=LinearLayout(this).apply{orientation=0;setBackgroundColor(sand());gravity=android.view.Gravity.CENTER_VERTICAL};miniTitle=TextView(this).apply{setTextColor(ink());setPadding(dp(12),0,dp(8),0)};mini.addView(miniTitle,LinearLayout.LayoutParams(0,-2,1f));miniToggle=button(mini,"Reproducir"){toggleAudio()};button(mini,"Abrir"){playerDialog()};outer.addView(mini);updateMini();setContentView(outer)
   button(nav,"Biblioteca"){library.requestFocus();scroll.smoothScrollTo(0,library.top)}
+  button(nav,"Reproductor"){playerDialog()}
   button(nav,"Conversión"){scroll.smoothScrollTo(0,0)}
   button(nav,"Ajustes"){android.app.AlertDialog.Builder(this).setTitle("Ajustes").setItems(arrayOf(if(dark)"Modo claro" else "Modo oscuro")){_,_->getPreferences(0).edit().putBoolean("dark",!dark).apply();recreate()}.show()}
   label(root,"VoxNatural AI",30)
@@ -69,16 +106,25 @@ class MainActivity : Activity() {
  private fun button(parent:LinearLayout,s:String,action:()->Unit)=Button(this).apply { text=s; isAllCaps=false; setTextColor(Color.WHITE); backgroundTintList=android.content.res.ColorStateList.valueOf(burgundy); setOnClickListener { action() }; parent.addView(this) }
  private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
  override fun onResume(){ super.onResume(); refresh.post(tick) }
- override fun onPause(){ refresh.removeCallbacks(tick); super.onPause() }
- private fun showStatus(){ status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(library.tag!=libraryState()) render() }
+ override fun onPause(){ savePlayback();refresh.removeCallbacks(tick); super.onPause() }
+ override fun onDestroy(){savePlayback();player?.release();player=null;super.onDestroy()}
+ private fun showStatus(){ updateMini();savePlayback();status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(library.tag!=libraryState()) render() }
  private fun libraryState()=docs.listFiles()?.sortedBy{it.name}?.joinToString("|"){ it.name+":"+(it.listFiles()?.filter{a->a.extension in listOf("wav","mp3")}?.sortedBy{a->a.name}?.joinToString(","){a->a.name+":"+a.lastModified()} ?: "") } ?: ""
  private fun render(){
   library.removeAllViews()
   docs.listFiles()?.filter { File(it,"name").isFile }?.sortedByDescending { it.lastModified() }?.forEach { f ->
-   button(library,(if(selected==f) "✓ " else "")+File(f,"name").readText()){ selected=f; render(); showStatus() }
+   val card=LinearLayout(this).apply{orientation=0;setBackgroundColor(sand());setPadding(dp(12),dp(12),dp(12),dp(12))}
+   val cover=TextView(this).apply{text=titleOf(f);textSize=16f;setTextColor(Color.WHITE);setBackgroundColor(burgundy);gravity=android.view.Gravity.CENTER;typeface=android.graphics.Typeface.SERIF;setPadding(dp(8),dp(8),dp(8),dp(8))}
+   card.addView(cover,LinearLayout.LayoutParams(dp(100),dp(145)))
+   val info=LinearLayout(this).apply{orientation=1;setPadding(dp(12),0,0,0)};card.addView(info,LinearLayout.LayoutParams(0,-2,1f))
+   label(info,titleOf(f),23);label(info,authorOf(f),14)
+   button(info,if(selected==f)"Seleccionado" else "Seleccionar"){selected=f;render();showStatus()}
+   button(info,"Editar datos"){editBook(f)}
+   library.addView(card)
    val voices=linkedMapOf(28 to "Dora",29 to "Alex",53 to "Santa",100 to "DaveFX",-1 to "Android",200 to "Supertonic F1",205 to "Supertonic M1")
    for((sid,label) in voices) for(ext in listOf("mp3","wav")){
     val audio=File(f,"audio-"+sid+"."+ext)
+    if(audio.isFile) button(library,"Escuchar "+audio.name){playAudio(audio)}
     if(audio.isFile) button(library,"Guardar "+label+" · "+ext.uppercase()){
      exportFile=audio
      startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply{type=if(ext=="mp3")"audio/mpeg" else "audio/wav";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+"_"+label+"."+ext)},11)
@@ -86,6 +132,7 @@ class MainActivity : Activity() {
    }
    for(ext in listOf("mp3","wav")){
     val audio=File(f,"audio."+ext)
+    if(audio.isFile) button(library,"Escuchar "+audio.name){playAudio(audio)}
     if(audio.isFile) button(library,"Guardar anterior · "+ext.uppercase()){
      exportFile=audio
      startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply{type=if(ext=="mp3")"audio/mpeg" else "audio/wav";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_TITLE,File(f,"name").readText().substringBeforeLast(".")+"."+ext)},11)
