@@ -1,1 +1,2 @@
-# VoxNatural-AI.
+# VoxNatural AI
+Android arm64, offline document-to-audio library. Supports digital PDF, DOCX and TXT, local Android TTS and Kokoro, Piper, Supertonic and PocketTTS. Scanned PDFs require external OCR. Build via GitHub Actions. Beta 3 focuses on correctness and audit; tablet performance and long-duration tests are deferred to Beta 4. See model notices. Public redistribution requires independent license review, including native LAME linkage obligations.

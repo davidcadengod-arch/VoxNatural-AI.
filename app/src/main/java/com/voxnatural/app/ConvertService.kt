@@ -11,7 +11,10 @@ import java.util.concurrent.TimeUnit
 
 class ConvertService:Service(){
  private var tts:TextToSpeech?=null
- private var busy=false
+ @Volatile private var busy=false
+ @Volatile private var interrupted=false
+ private fun checkActive(){check(!interrupted){"Conversión interrumpida; los fragmentos válidos se conservan"}}
+ override fun onTimeout(startId:Int, fgsType:Int){interrupted=true;report("Tiempo de servicio agotado; vuelve a convertir para reanudar");stopSelf()}
  private var lock:PowerManager.WakeLock?=null
  override fun onBind(i:Intent?)=null
  private fun report(s:String){getSharedPreferences("jobs",0).edit().putString("status",s).apply()}
@@ -56,13 +59,14 @@ class ConvertService:Service(){
    }
    val parts=File(folder,"parts").apply{mkdirs()}
    val signature=File(parts,"signature")
-   val key=v.name+"|"+text.hashCode()+"|"+limit
+   val key=v.name+"|"+java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}+"|"+limit
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
    for((index,chunk) in chunks.withIndex()){
+    checkActive()
     report("Fragmento "+(index+1)+" de "+chunks.size)
     val file=File(parts,index.toString()+".wav")
     val completed=File(parts,index.toString()+".done")
-    if(completed.isFile && file.length()>44)continue
+    if(completed.isFile && validNeuralWav(file))continue
     completed.delete()
     file.delete()
     val latch=CountDownLatch(1);var ok=false
@@ -75,6 +79,7 @@ class ConvertService:Service(){
     require(latch.await(10,TimeUnit.MINUTES)&&ok && file.length()>44){"Error de síntesis"}
     completed.writeText("ok")
    }
+   checkActive()
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio--1.wav"))
    parts.deleteRecursively()
    finishAudio(folder,-1)
@@ -131,6 +136,7 @@ class ConvertService:Service(){
    if(fragment>=0){require(fragment in chunks.indices){"Fragmento inexistente"};require(chunks.indices.all{File(parts,it.toString()+".done").isFile && validNeuralWav(File(parts,it.toString()+".wav"))}){"Primero completa la conversión con la configuración actual"};File(parts,fragment.toString()+".done").delete()}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
+     checkActive()
      report((when(sid){100->"Piper: ";in 200..209->"Supertonic: ";300->"PocketTTS: ";else->"Kokoro: "})+(index+1)+" de "+chunks.size)
      val f=File(parts,index.toString()+".wav")
      val done=File(parts,index.toString()+".done")
@@ -210,5 +216,5 @@ class ConvertService:Service(){
   }
   require(tmp.renameTo(out)){"No se pudo guardar WAV"}
  }
- override fun onDestroy(){tts?.shutdown();if(lock?.isHeld==true)lock?.release();super.onDestroy()}
+ override fun onDestroy(){interrupted=true;tts?.shutdown();if(lock?.isHeld==true)lock?.release();super.onDestroy()}
 }

@@ -178,12 +178,15 @@ class MainActivity : Activity() {
  private lateinit var docs: File
  private var selected: File? = null
  private var exportFile: File? = null
+ override fun onSaveInstanceState(out:Bundle){super.onSaveInstanceState(out);out.putString("exportPath",exportFile?.absolutePath);out.putString("selectedId",selected?.name)}
  private val refresh = android.os.Handler(android.os.Looper.getMainLooper())
  private val tick = object : Runnable { override fun run() { showStatus(); refresh.postDelayed(this,1500) } }
  override fun onCreate(b:Bundle?) {
   super.onCreate(b)
   PDFBoxResourceLoader.init(applicationContext)
   docs=File(filesDir,"library").apply { mkdirs() }
+  exportFile=b?.getString("exportPath")?.let{File(it)}
+  selected=b?.getString("selectedId")?.let{File(docs,it)}?.takeIf{File(it,"name").isFile}
   dark=getPreferences(0).getBoolean("dark",false)
   val wide=resources.configuration.orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE
   shell=LinearLayout(this).apply{orientation=if(wide)0 else 1;setBackgroundColor(paper())}
@@ -262,7 +265,7 @@ class MainActivity : Activity() {
   super.onActivityResult(request,result,data)
   if(result!=RESULT_OK) return
   val uri=data?.data?:return
-  if(request==11){ try { contentResolver.openOutputStream(uri)!!.use { out -> exportFile!!.inputStream().use { it.copyTo(out) } }; toast("Audio guardado") } catch(e:Exception){toast(e.message?:"Error")}; return }
+  if(request==11){ val source=exportFile; if(source==null||!source.isFile){toast("Selecciona nuevamente el audio");return}; Thread{try{contentResolver.openOutputStream(uri)!!.use{out->source.inputStream().use{it.copyTo(out)}};runOnUiThread{toast("Audio guardado")}}catch(e:Exception){runOnUiThread{toast(e.message?:"Error")}}}.start(); return }
   if(request==12){try{val tmp=File(filesDir,"pocket-reference.tmp");contentResolver.openInputStream(uri)!!.use{input->tmp.outputStream().use{out->val buf=ByteArray(8192);var total=0;while(true){val count=input.read(buf);if(count<0)break;total+=count;require(total<=4000000){"Referencia demasiado grande"};out.write(buf,0,count)}}};PocketReference.read(tmp);require(tmp.renameTo(File(filesDir,"pocket-reference.wav"))){"No se pudo guardar referencia"};toast("Referencia autorizada guardada")}catch(e:Exception){toast(e.message?:"Referencia inválida")};return}
   if(request!=10)return
   Thread {
@@ -282,7 +285,7 @@ class MainActivity : Activity() {
     if(name.endsWith(".pdf",true))try{
      android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(original,android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use{r->r.openPage(0).use{p->val bmp=android.graphics.Bitmap.createBitmap(240,(240f*p.height/p.width).toInt().coerceIn(1,600),android.graphics.Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);File(f,"cover.png").outputStream().use{bmp.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bmp.recycle()}}
     }catch(_:Exception){}
-    runOnUiThread { selected=f; render(); showStatus() }
+    runOnUiThread { if(!isDestroyed){selected=f; render(); showStatus()} }
    }catch(e:Exception){folder?.deleteRecursively(); runOnUiThread{toast(e.message?:"Error de importación")}}
   }.start()
  }
