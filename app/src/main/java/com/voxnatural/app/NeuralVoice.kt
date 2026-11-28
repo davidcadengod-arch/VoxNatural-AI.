@@ -9,7 +9,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
  private val piper=sid==100
  private val supertonic=sid in 200..209
  private val asset=if(pocket)"pocket" else if(supertonic)"supertonic" else if(piper)"piper" else "kokoro"
- private val dir=File(context.filesDir,asset+"-v1")
+ private val dir=File(context.filesDir,asset+(if(pocket)"-v2" else "-v1"))
  private val tts:OfflineTts
  init {
   synchronized(NeuralVoice::class.java) {
@@ -44,7 +44,7 @@ class NeuralVoice(context:Context, private val sid:Int):AutoCloseable {
    text.endsWith("?") -> 0.98f
    else -> 0.97f
   }
-  val audio=if(pocket){val ref=if(referenceAudio!=null) Pair(referenceAudio,referenceSampleRate) else PocketReference.read(File(appContext.filesDir,"pocket-reference.wav"));tts.generateWithConfig(text,GenerationConfig(referenceAudio=ref.first,referenceSampleRate=ref.second,speed=speed,numSteps=10))} else if(supertonic) tts.generateWithConfig(text,GenerationConfig(sid=sid-200,speed=speed,numSteps=8,extra=mapOf("lang" to "es"))) else tts.generate(text,if(piper)0 else sid,speed)
+  val audio=if(pocket){val ref=if(referenceAudio!=null) Pair(referenceAudio,referenceSampleRate) else PocketReference.read(File(appContext.filesDir,"pocket-reference.wav").takeIf{it.isFile} ?: File(dir,"reference.wav"));tts.generateWithConfig(text,GenerationConfig(referenceAudio=ref.first,referenceSampleRate=ref.second,speed=speed,numSteps=10))} else if(supertonic) tts.generateWithConfig(text,GenerationConfig(sid=sid-200,speed=speed,numSteps=8,extra=mapOf("lang" to "es"))) else tts.generate(text,if(piper)0 else sid,speed)
   require(audio.samples.isNotEmpty() && audio.samples.all{it.isFinite()}){"Audio neuronal inválido"}
   // Preserve dynamics: attenuate only peaks that risk clipping, with short edge fades.
   val samples=audio.samples

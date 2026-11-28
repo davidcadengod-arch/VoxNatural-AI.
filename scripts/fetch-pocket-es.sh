@@ -28,3 +28,20 @@ printf '%s  %s\n' '77ee74a998f592a9e2e36f9529c29d3f479e4f56999efb29b5200beb47c26
 mv 'token_scores.json.tmp' 'token_scores.json'
 curl -fL --retry 3 "$base/LICENSE" -o LICENSE
 test -s LICENSE
+
+# Licensed synthetic Kokoro reference, not a recording of a human speaker.
+curl -fL --retry 3 https://huggingface.co/lineofflight/pocket-tts-kokoro-voices/resolve/main/samples/em_alex.wav -o reference.wav
+python3 - <<'PY'
+import wave
+with wave.open("reference.wav","rb") as f:
+    assert f.getnchannels()==1 and f.getsampwidth()==2 and 16000<=f.getframerate()<=48000
+    assert 3<=f.getnframes()/f.getframerate()<=20
+PY
+sha256sum reference.wav > reference.sha256
+cat > VOICE-NOTICE.txt <<'EOF'
+Alex (em_alex): synthetic output of hexgrad/Kokoro-82M (Apache-2.0), distributed for PocketTTS by lineofflight/pocket-tts-kokoro-voices (CC BY 4.0).
+https://huggingface.co/lineofflight/pocket-tts-kokoro-voices
+https://huggingface.co/hexgrad/Kokoro-82M
+https://creativecommons.org/licenses/by/4.0/
+Unmodified reference sample; generated narration is synthetic, not a genuine human recording.
+EOF

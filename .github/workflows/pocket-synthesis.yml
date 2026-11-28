@@ -2,7 +2,7 @@ name: PocketTTS synthesis smoke test
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/pocket-synthesis.yml']
+    paths: ['.github/workflows/pocket-synthesis.yml', 'scripts/fetch-pocket-es.sh']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,15 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install runtime and synthetic reference generator
+      - name: Install runtime
         run: |
           pip install sherpa-onnx==1.13.8 numpy
-          sudo apt-get update
-          sudo apt-get install -y espeak-ng
       - name: Verify model
         run: bash scripts/fetch-pocket-es.sh "$RUNNER_TEMP/pocket"
-      - name: Generate synthetic reference without human voice
-        run: espeak-ng -v es -s 145 -w "$RUNNER_TEMP/reference.wav" "Esta es una referencia artificial para comprobar el funcionamiento del motor de síntesis de voz."
       - name: Execute actual synthesis
         run: |
           python - <<'PY'
@@ -32,7 +28,7 @@ jobs:
           p=Path(os.environ["RUNNER_TEMP"])/"pocket"
           model=s.OfflineTtsPocketModelConfig(lm_flow=str(p/"lm_flow.int8.onnx"),lm_main=str(p/"lm_main.int8.onnx"),encoder=str(p/"encoder.onnx"),decoder=str(p/"decoder.int8.onnx"),text_conditioner=str(p/"text_conditioner.onnx"),vocab_json=str(p/"vocab.json"),token_scores_json=str(p/"token_scores.json"))
           tts=s.OfflineTts(s.OfflineTtsConfig(model=s.OfflineTtsModelConfig(pocket=model,num_threads=4,provider="cpu")))
-          with wave.open(str(p.parent/"reference.wav"),"rb") as f:
+          with wave.open(str(p/"reference.wav"),"rb") as f:
               rate=f.getframerate()
               ref=np.frombuffer(f.readframes(f.getnframes()),dtype="<i2").astype(np.float32)/32768
           cfg=s.GenerationConfig()
@@ -49,5 +45,5 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: pocket-synthesis-smoke
+          name: pocket-alex-synthesis
           path: pocket-smoke.wav
