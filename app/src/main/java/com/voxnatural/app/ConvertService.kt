@@ -127,7 +127,7 @@ class ConvertService:Service(){
    if(fragment>=0){require(fragment in chunks.indices){"Fragmento inexistente"};require(chunks.indices.all{File(parts,it.toString()+".done").isFile && validNeuralWav(File(parts,it.toString()+".wav"))}){"Primero completa la conversión con la configuración actual"};File(parts,fragment.toString()+".done").delete()}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
-     report((when(sid){100->"Piper: ";in 200..209->"Supertonic: ";else->"Kokoro: "})+(index+1)+" de "+chunks.size)
+     report((when(sid){100->"Piper: ";in 200..209->"Supertonic: ";300->"PocketTTS: ";else->"Kokoro: "})+(index+1)+" de "+chunks.size)
      val f=File(parts,index.toString()+".wav")
      val done=File(parts,index.toString()+".done")
      if(done.isFile && validNeuralWav(f))continue

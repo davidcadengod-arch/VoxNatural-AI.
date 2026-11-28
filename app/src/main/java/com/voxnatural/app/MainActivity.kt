@@ -97,7 +97,7 @@ class MainActivity : Activity() {
   val panel=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(8),dp(16),dp(8))}
   val sample=EditText(this).apply{setText("La mañana llegó lentamente. ¿Qué encontraríamos al otro lado? Nadie conocía la respuesta.");maxLines=5};panel.addView(sample)
   val result=label(panel,"Selecciona una voz para generar una muestra local.",14)
-  val choices=linkedMapOf(28 to "Dora · Kokoro",29 to "Alex · Kokoro",53 to "Santa · Kokoro",100 to "DaveFX · Piper",200 to "Supertonic F1",205 to "Supertonic M1")
+  val choices=linkedMapOf(28 to "Dora · Kokoro",29 to "Alex · Kokoro",53 to "Santa · Kokoro",100 to "DaveFX · Piper",200 to "Supertonic F1",205 to "Supertonic M1",300 to "PocketTTS")
   for((sid,name) in choices)button(panel,name){
    if(previewBusy){toast("Espera la muestra actual");return@button}
    val input=sample.text.toString().trim()
@@ -202,16 +202,17 @@ class MainActivity : Activity() {
   button(root,"Subir") {
    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type="*/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain")) },10)
   }
-  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1")) }
+  voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1","PocketTTS · referencia propia")) }
   root.addView(voice)
+  button(root,"Importar referencia PocketTTS (WAV)"){android.app.AlertDialog.Builder(this).setTitle("Referencia autorizada").setMessage("Usa únicamente tu propia voz o una grabación con permiso explícito para síntesis. WAV PCM mono de 3 a 20 segundos.").setNegativeButton("Cancelar",null).setPositiveButton("Tengo autorización"){_,_->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("audio/*").addCategory(Intent.CATEGORY_OPENABLE),12)}.show()}
   button(root,"Comparar voces"){compareVoices()}
   status=label(root,"Selecciona un documento",16)
   button(root,"Convertir a audio") {
    val f=selected
    if(f==null) toast("Primero selecciona un documento")
-   else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,100,-1,200,205)[voice.selectedItemPosition]))
+   else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,100,-1,200,205,300)[voice.selectedItemPosition]))
   }
-  button(root,"Regenerar fragmento"){val f=selected;val sid=intArrayOf(28,29,53,100,-1,200,205)[voice.selectedItemPosition];if(f==null||sid<0)toast("Selecciona un libro y una voz neuronal") else regenerate(f,sid)}
+  button(root,"Regenerar fragmento"){val f=selected;val sid=intArrayOf(28,29,53,100,-1,200,205,300)[voice.selectedItemPosition];if(f==null||sid<0)toast("Selecciona un libro y una voz neuronal") else regenerate(f,sid)}
   label(root,"Mi biblioteca",23)
   library=LinearLayout(this).apply { orientation=1 }; root.addView(library)
   render()
@@ -262,6 +263,7 @@ class MainActivity : Activity() {
   if(result!=RESULT_OK) return
   val uri=data?.data?:return
   if(request==11){ try { contentResolver.openOutputStream(uri)!!.use { out -> exportFile!!.inputStream().use { it.copyTo(out) } }; toast("Audio guardado") } catch(e:Exception){toast(e.message?:"Error")}; return }
+  if(request==12){try{val tmp=File(filesDir,"pocket-reference.tmp");contentResolver.openInputStream(uri)!!.use{input->tmp.outputStream().use{out->val buf=ByteArray(8192);var total=0;while(true){val count=input.read(buf);if(count<0)break;total+=count;require(total<=4000000){"Referencia demasiado grande"};out.write(buf,0,count)}}};PocketReference.read(tmp);require(tmp.renameTo(File(filesDir,"pocket-reference.wav"))){"No se pudo guardar referencia"};toast("Referencia autorizada guardada")}catch(e:Exception){toast(e.message?:"Referencia inválida")};return}
   if(request!=10)return
   Thread {
    var folder:File?=null
