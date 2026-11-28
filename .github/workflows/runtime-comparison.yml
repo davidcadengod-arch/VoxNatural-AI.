@@ -1,0 +1,53 @@
+name: Experimental runtime comparison
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/runtime-comparison.yml', 'scripts/fetch-pocket-es.sh', 'app/src/main/java/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthesis:
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: ['1.13.8', '2.0.1']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime
+        run: |
+          pip install sherpa-onnx==${{ matrix.runtime }} numpy
+      - name: Verify model
+        run: bash scripts/fetch-pocket-es.sh "$RUNNER_TEMP/pocket"
+      - name: Execute actual synthesis
+        run: |
+          python - <<'PY'
+          import os, wave, numpy as np, sherpa_onnx as s
+          from pathlib import Path
+          p=Path(os.environ["RUNNER_TEMP"])/"pocket"
+          model=s.OfflineTtsPocketModelConfig(lm_flow=str(p/"lm_flow.int8.onnx"),lm_main=str(p/"lm_main.int8.onnx"),encoder=str(p/"encoder.onnx"),decoder=str(p/"decoder.int8.onnx"),text_conditioner=str(p/"text_conditioner.onnx"),vocab_json=str(p/"vocab.json"),token_scores_json=str(p/"token_scores.json"))
+          tts=s.OfflineTts(s.OfflineTtsConfig(model=s.OfflineTtsModelConfig(pocket=model,num_threads=4,provider="cpu")))
+          with wave.open(str(p/"reference.wav"),"rb") as f:
+              rate=f.getframerate()
+              ref=np.frombuffer(f.readframes(f.getnframes()),dtype="<i2").astype(np.float32)/32768
+          cfg=s.GenerationConfig()
+          cfg.reference_audio=ref.tolist()
+          cfg.reference_sample_rate=rate
+          cfg.num_steps=10
+          audio=tts.generate("La mañana llegó lentamente. ¿Qué encontraríamos al otro lado?",cfg)
+          a=np.asarray(audio.samples)
+          assert a.size>audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
+          with wave.open("pocket-smoke.wav","wb") as f:
+              f.setnchannels(1);f.setsampwidth(2);f.setframerate(audio.sample_rate)
+              f.writeframes((np.clip(a,-1,1)*32767).astype("<i2").tobytes())
+          print("Samples:",a.size,"Rate:",audio.sample_rate)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pocket-runtime-${{ matrix.runtime }}
+          path: pocket-smoke.wav
