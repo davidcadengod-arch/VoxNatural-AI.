@@ -83,19 +83,7 @@ jobs:
           elif kind=="kokoro":
               model=s.OfflineTtsModelConfig(kokoro=s.OfflineTtsKokoroModelConfig(model=f("model.onnx"),voices=f("voices.bin"),tokens=f("tokens.txt"),lexicon=str(lex),lang="es"),num_threads=4,provider="cpu")
           else:
-              model=s.OfflineTtsModelConfig(vits=s.OfflineTtsVitsModelConfig(model=f("es_ES-davefx-medium.onnx"),tokens=f("tokens.txt"),lexicon=str(lex)),num_threads=4,provider="cpu")
-          if kind=="piper":
-              # Older Sherpa Piper vocabularies use numeric IDs with named special tokens.
-              tokenfile=p/'tokens.txt'
-              rows=tokenfile.read_text().splitlines()
-              print("Piper vocabulary prefix:",repr(rows[:12]),flush=True)
-              parsed={line.rsplit(maxsplit=1)[0]:int(line.rsplit(maxsplit=1)[1]) for line in rows if len(line.rsplit(maxsplit=1))==2}
-              for symbol,aliases,expected in [('_',('<pad>','<blank>'),0),('^',('<bos>','<s>'),1),('$',('<eos>','</s>'),2)]:
-                  if symbol not in parsed:
-                      matches=[key for key in aliases if parsed.get(key)==expected]
-                      assert len(matches)==1,(symbol,expected,rows[:12])
-                      rows=[symbol+' '+str(expected) if line.rsplit(maxsplit=1)[0]==matches[0] else line for line in rows if line.strip()]
-              tokenfile.write_text('\n'.join(rows)+'\n')
+              model=s.OfflineTtsModelConfig(vits=s.OfflineTtsVitsModelConfig(model=f("es_ES-davefx-medium.onnx"),tokens=f("tokens.txt")),num_threads=4,provider="cpu")
           tts=s.OfflineTts(s.OfflineTtsConfig(model=model))
           text="La mañana llegó lentamente. ¿Qué encontraríamos al otro lado?"
           if kind=="supertonic":
