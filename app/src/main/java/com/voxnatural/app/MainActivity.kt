@@ -64,6 +64,35 @@ class MainActivity : Activity() {
    val dialog=android.app.Dialog(this);dialog.setContentView(panel);dialog.setOnDismissListener{render()};dialog.show();dialog.window?.setLayout(-1,-1)
   }catch(e:Exception){toast(e.message?:"No se pudo abrir el libro")}
  }
+ private var previewBusy=false
+ private fun compareVoices(){
+  val panel=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(8),dp(16),dp(8))}
+  val sample=EditText(this).apply{setText("La mañana llegó lentamente. ¿Qué encontraríamos al otro lado? Nadie conocía la respuesta.");maxLines=5};panel.addView(sample)
+  val result=label(panel,"Selecciona una voz para generar una muestra local.",14)
+  val choices=linkedMapOf(28 to "Dora · Kokoro",29 to "Alex · Kokoro",53 to "Santa · Kokoro",100 to "DaveFX · Piper",200 to "Supertonic F1",205 to "Supertonic M1")
+  for((sid,name) in choices)button(panel,name){
+   if(previewBusy){toast("Espera la muestra actual");return@button}
+   val input=sample.text.toString().trim()
+   if(input.isEmpty()||input.length>260){toast("Escribe entre 1 y 260 caracteres");return@button}
+   previewBusy=true;result.text="Generando "+name
+   Thread{
+    try{
+     val folder=File(cacheDir,"voice-preview").apply{mkdirs()}
+     val file=File(folder,java.util.UUID.randomUUID().toString()+".wav")
+     val start=android.os.SystemClock.elapsedRealtime()
+     NeuralVoice(this,sid).use{it.generate(Pronunciation(this).apply(input),file)}
+     require(file.length()>44)
+     val elapsed=android.os.SystemClock.elapsedRealtime()-start
+     runOnUiThread{previewBusy=false;if(!isDestroyed){result.text=name+" · "+elapsed+" ms · "+file.length()+" bytes";playPreview(file)}}
+    }catch(e:Throwable){runOnUiThread{previewBusy=false;result.text="Error: "+e.message}}
+   }.start()
+  }
+  android.app.AlertDialog.Builder(this).setTitle("Comparar voces").setView(ScrollView(this).apply{addView(panel)}).setPositiveButton("Cerrar",null).show()
+ }
+ private var previewPlayer:android.media.MediaPlayer?=null
+ private fun playPreview(file:File){
+  try{player?.pause();updateMini();previewPlayer?.release();val m=android.media.MediaPlayer();previewPlayer=m;m.setDataSource(file.absolutePath);m.prepare();m.setOnCompletionListener{it.release();if(previewPlayer===it)previewPlayer=null;file.delete()};m.start()}catch(e:Exception){previewPlayer?.release();previewPlayer=null;toast(e.message?:"Error de muestra")}
+ }
  private fun dictionary(){
   val dict=Pronunciation(this);val panel=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(8),dp(16),dp(8))}
   val word=EditText(this).apply{hint="Palabra original"};panel.addView(word)
@@ -132,6 +161,7 @@ class MainActivity : Activity() {
   }
   voice=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("Dora · Kokoro","Alex · Kokoro","Santa · Kokoro","DaveFX · Piper","Español · motor local de Android","Supertonic 3 · F1","Supertonic 3 · M1")) }
   root.addView(voice)
+  button(root,"Comparar voces"){compareVoices()}
   status=label(root,"Selecciona un documento",16)
   button(root,"Convertir a audio") {
    val f=selected
@@ -148,7 +178,7 @@ class MainActivity : Activity() {
  private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
  override fun onResume(){ super.onResume(); refresh.post(tick) }
  override fun onPause(){ savePlayback();refresh.removeCallbacks(tick); super.onPause() }
- override fun onDestroy(){savePlayback();player?.release();player=null;super.onDestroy()}
+ override fun onDestroy(){previewPlayer?.release();previewPlayer=null;savePlayback();player?.release();player=null;super.onDestroy()}
  private fun showStatus(){ updateMini();savePlayback();status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(library.tag!=libraryState()) render() }
  private fun libraryState()=docs.listFiles()?.sortedBy{it.name}?.joinToString("|"){ it.name+":"+(it.listFiles()?.filter{a->a.extension in listOf("wav","mp3")}?.sortedBy{a->a.name}?.joinToString(","){a->a.name+":"+a.lastModified()} ?: "") } ?: ""
  private fun render(){
