@@ -31,6 +31,30 @@ class MainActivity : Activity() {
  private lateinit var miniToggle:Button
  private fun titleOf(f:File)=File(f,"title").takeIf{it.isFile}?.readText()?.takeIf{it.isNotBlank()}?:File(f,"name").readText().substringBeforeLast(".")
  private fun authorOf(f:File)=File(f,"author").takeIf{it.isFile}?.readText()?.takeIf{it.isNotBlank()}?:"Autor desconocido"
+ private fun readPdf(f:File){
+  try{
+   val renderer=android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(File(f,"original"),android.os.ParcelFileDescriptor.MODE_READ_ONLY))
+   val prefs=getPreferences(0);var page=prefs.getInt("read:"+f.name,0).coerceIn(0,renderer.pageCount-1)
+   var dual=false
+   val panel=LinearLayout(this).apply{orientation=1;setBackgroundColor(paper())}
+   val stats=label(panel,"",16)
+   val spread=LinearLayout(this).apply{orientation=0};panel.addView(spread,LinearLayout.LayoutParams(-1,0,1f))
+   val images=List(2){ImageView(this).apply{adjustViewBounds=true;scaleType=ImageView.ScaleType.FIT_CENTER;spread.addView(this,LinearLayout.LayoutParams(0,-1,1f))}}
+   fun update(){
+    for(i in images.indices){val v=images[i];v.setImageDrawable(null);val n=page+i;v.visibility=if((i==0||dual)&&n<renderer.pageCount)android.view.View.VISIBLE else android.view.View.GONE
+     if(v.visibility==android.view.View.VISIBLE)renderer.openPage(n).use{p->val scale=minOf(2f,1600f/maxOf(p.width,p.height));val bmp=android.graphics.Bitmap.createBitmap((p.width*scale).toInt().coerceAtLeast(1),(p.height*scale).toInt().coerceAtLeast(1),android.graphics.Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);v.setImageBitmap(bmp)}
+    }
+    stats.text="Página ${page+1} de ${renderer.pageCount}";prefs.edit().putInt("read:"+f.name,page).putInt("pages:"+f.name,renderer.pageCount).apply()
+   }
+   val controls=LinearLayout(this).apply{orientation=0};panel.addView(controls)
+   button(controls,"Anterior"){page=(page-if(dual)2 else 1).coerceAtLeast(0);update()}
+   button(controls,"Siguiente"){page=(page+if(dual)2 else 1).coerceAtMost(renderer.pageCount-1);update()}
+   button(panel,"Una / dos páginas"){dual=!dual;update()}
+   button(panel,"Guardar marcador"){prefs.edit().putInt("mark:"+f.name,page).apply();toast("Marcador guardado")}
+   button(panel,"Ir al marcador"){page=prefs.getInt("mark:"+f.name,page).coerceIn(0,renderer.pageCount-1);update()}
+   val dialog=android.app.Dialog(this);dialog.setContentView(panel);dialog.setOnDismissListener{renderer.close();render()};update();dialog.show();dialog.window?.setLayout(-1,-1)
+  }catch(e:Exception){toast(e.message?:"No se pudo abrir PDF")}
+ }
  private fun readingProgress(f:File):String {
   val total=File(f,"text").length()
   val pos=getPreferences(0).getInt("read:"+f.name,0)
@@ -38,6 +62,7 @@ class MainActivity : Activity() {
   return if(pages>0)"Página ${pos+1} de $pages · ${((pos+1)*100L/pages).coerceAtMost(100)}%" else if(total>0)"Sin iniciar lectura" else "Sin texto"
  }
  private fun readBook(f:File){
+  if(File(f,"name").readText().endsWith(".pdf",true)){readPdf(f);return}
   try{
    val source=File(f,"text").readText()
    val pages=mutableListOf<String>();var start=0
@@ -199,7 +224,7 @@ class MainActivity : Activity() {
   docs.listFiles()?.filter { File(it,"name").isFile }?.sortedByDescending { it.lastModified() }?.forEach { f ->
    val card=LinearLayout(this).apply{orientation=0;setBackgroundColor(sand());setPadding(dp(12),dp(12),dp(12),dp(12))}
    val cover=TextView(this).apply{text=titleOf(f);textSize=16f;setTextColor(Color.WHITE);setBackgroundColor(burgundy);gravity=android.view.Gravity.CENTER;typeface=android.graphics.Typeface.SERIF;setPadding(dp(8),dp(8),dp(8),dp(8))}
-   card.addView(cover,LinearLayout.LayoutParams(dp(100),dp(145)))
+   val originalCover=File(f,"cover.png");if(originalCover.isFile){val image=ImageView(this).apply{setImageBitmap(android.graphics.BitmapFactory.decodeFile(originalCover.absolutePath));scaleType=ImageView.ScaleType.FIT_CENTER};card.addView(image,LinearLayout.LayoutParams(dp(100),dp(145)))}else card.addView(cover,LinearLayout.LayoutParams(dp(100),dp(145)))
    val info=LinearLayout(this).apply{orientation=1;setPadding(dp(12),0,0,0)};card.addView(info,LinearLayout.LayoutParams(0,-2,1f))
    label(info,titleOf(f),23);label(info,authorOf(f),14);label(info,readingProgress(f),14)
    button(info,"Leer"){readBook(f)}
@@ -246,6 +271,9 @@ class MainActivity : Activity() {
     }
     require(text.isNotBlank()){"No se encontró texto digital"}
     File(f,"text").writeText(text); File(f,"name").writeText(name)
+    if(name.endsWith(".pdf",true))try{
+     android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(original,android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use{r->r.openPage(0).use{p->val bmp=android.graphics.Bitmap.createBitmap(240,(240f*p.height/p.width).toInt().coerceIn(1,600),android.graphics.Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);File(f,"cover.png").outputStream().use{bmp.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bmp.recycle()}}
+    }catch(_:Exception){}
     runOnUiThread { selected=f; render(); showStatus() }
    }catch(e:Exception){folder?.deleteRecursively(); runOnUiThread{toast(e.message?:"Error de importación")}}
   }.start()
