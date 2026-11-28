@@ -85,34 +85,42 @@ class ConvertService:Service(){
  private fun convertNeural(folder:File,sid:Int){
   try{
    val text=File(folder,"text").readText()
-   val normalized=text.replace("\r\n","\n").replace('\r','\n')
+   val normalized=java.text.Normalizer.normalize(text,java.text.Normalizer.Form.NFC)
+    .replace("\r\n","\n").replace('\r','\n').replace("\u00ad","").replace('\u00a0',' ')
    val chunks=mutableListOf<String>()
+   val pauses=mutableListOf<Int>()
    val breaks=java.text.BreakIterator.getSentenceInstance(Locale("es"))
+   fun emit(part:String,pause:Int){
+    if(part.isNotBlank()){chunks.add(part.trim());pauses.add(pause)}
+   }
    for(paragraph in normalized.split(Regex("\\n\\s*\\n"))){
     val clean=paragraph.replace(Regex("\\s+")," ").trim()
     if(clean.isEmpty())continue
     breaks.setText(clean)
     var begin=breaks.first()
     var finish=breaks.next()
+    var pending=""
     while(finish!=java.text.BreakIterator.DONE){
-     var pos=begin
-     while(pos<finish){
-      var end=minOf(pos+240,finish)
-      if(end<finish){
-       val clause=clean.lastIndexOfAny(charArrayOf(';',':',','),end-1)
-       val space=clean.lastIndexOf(' ',end-1)
-       if(clause>pos+100)end=clause+1 else if(space>pos)end=space+1
-       if(Character.isHighSurrogate(clean[end-1]))end--
-      }
-      val part=clean.substring(pos,end).trim()
-      if(part.isNotEmpty())chunks.add(part)
-      pos=end
+     val sentence=clean.substring(begin,finish).trim()
+     if(pending.isNotEmpty() && pending.length+sentence.length+1>260){
+      emit(pending,100);pending=""
+     }
+     pending=(pending+" "+sentence).trim()
+     while(pending.length>260){
+      val clause=pending.lastIndexOfAny(charArrayOf(';',':',','),259)
+      val space=pending.lastIndexOf(' ',259)
+      var cut=if(clause>120)clause+1 else if(space>0)space+1 else 260
+      if(Character.isHighSurrogate(pending[cut-1]))cut--
+      emit(pending.substring(0,cut),if(clause>120)70 else 0)
+      pending=pending.substring(cut).trim()
      }
      begin=finish;finish=breaks.next()
     }
+    if(pending.isNotEmpty())emit(pending,240)
+    else if(pauses.isNotEmpty())pauses[pauses.lastIndex]=240
    }
    require(chunks.isNotEmpty())
-   val parts=File(folder,"neural-parts-"+sid+"-v3").apply{mkdirs()}
+   val parts=File(folder,"neural-parts-"+sid+"-v4").apply{mkdirs()}
    val signature=File(parts,"signature")
    val key=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
@@ -127,18 +135,18 @@ class ConvertService:Service(){
      require(f.length()>44);done.writeText("ok")
     }
    }
-   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio-"+sid+".wav"))
+   merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio-"+sid+".wav"),pauses)
    parts.deleteRecursively();finishAudio(folder,sid)
   }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
- private fun merge(files:List<File>,out:File){
+ private fun merge(files:List<File>,out:File,pauses:List<Int> = emptyList()){
   val tmp=File(out.parentFile,"audio.tmp")
   var format:ByteArray?=null
   var total=0L
   RandomAccessFile(tmp,"rw").use{dst->
    dst.setLength(0);dst.write(ByteArray(44))
-   for(f in files)RandomAccessFile(f,"r").use{src->
+   for((index,f) in files.withIndex())RandomAccessFile(f,"r").use{src->
     fun tag():String{val a=ByteArray(4);src.readFully(a);return String(a,Charsets.US_ASCII)}
     require(tag()=="RIFF");src.skipBytes(4);require(tag()=="WAVE")
     var found=false
@@ -156,6 +164,13 @@ class ConvertService:Service(){
       total+=n;found=true
      };src.seek(next)
     };require(found)
+    if(index<files.lastIndex && pauses.isNotEmpty()){
+     val fmt=java.nio.ByteBuffer.wrap(format!!).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+     val rate=fmt.getInt(4);val align=fmt.getShort(12).toInt() and 65535
+     require(rate in 8000..192000 && align in 1..32)
+     val count=(rate.toLong()*pauses[index]/1000*align).toInt()
+     dst.write(ByteArray(count));total+=count
+    }
    }
    require(total<=0xffffffffL-36)
    dst.seek(0);dst.writeBytes("RIFF");dst.writeInt(Integer.reverseBytes((total+36).toInt()));dst.writeBytes("WAVEfmt ");dst.writeInt(Integer.reverseBytes(16));dst.write(format!!);dst.writeBytes("data");dst.writeInt(Integer.reverseBytes(total.toInt()))
