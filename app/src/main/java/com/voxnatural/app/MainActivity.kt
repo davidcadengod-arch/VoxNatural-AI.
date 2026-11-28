@@ -24,6 +24,7 @@ class MainActivity : Activity() {
  private fun sand()=Color.parseColor(if(dark)"#393630" else "#E5DDD0")
  private val burgundy=Color.parseColor("#743B45")
  private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
+ private val sleepAction=Runnable{try{player?.pause();updateMini();savePlayback()}catch(_:Exception){}}
  private var player: android.media.MediaPlayer?=null
  private var playingFile:File?=null
  private lateinit var mini:LinearLayout
@@ -83,6 +84,8 @@ class MainActivity : Activity() {
    button(controls,"Anterior"){index=(index-if(doublePage)2 else 1).coerceAtLeast(0);update()}
    button(controls,"Siguiente"){index=(index+if(doublePage)2 else 1).coerceAtMost(pages.lastIndex);update()}
    button(panel,"Una / dos páginas"){doublePage=!doublePage;update()}
+   button(panel,"Buscar texto"){val q=EditText(this).apply{hint="Palabra o frase"};android.app.AlertDialog.Builder(this).setTitle("Buscar en libro").setView(q).setPositiveButton("Buscar"){_,_->val term=q.text.toString().trim();val found=if(term.isEmpty())-1 else pages.indices.firstOrNull{pages[it].contains(term,true)}?:-1;if(found>=0){index=found;update()}else toast("Sin coincidencias")}.setNegativeButton("Cancelar",null).show()}
+   button(panel,"Nota de página"){val key="note:"+f.name+":"+index;val note=EditText(this).apply{setText(prefs.getString(key,""))};android.app.AlertDialog.Builder(this).setTitle("Anotación").setView(note).setPositiveButton("Guardar"){_,_->prefs.edit().putString(key,note.text.toString()).apply()}.setNegativeButton("Cancelar",null).show()}
    button(panel,"Guardar marcador"){prefs.edit().putInt("mark:"+f.name,index).apply();toast("Marcador guardado")}
    button(panel,"Ir al marcador"){index=prefs.getInt("mark:"+f.name,index).coerceIn(0,pages.lastIndex);update()}
    update()
@@ -162,6 +165,9 @@ class MainActivity : Activity() {
   label(panel,playingFile?.parentFile?.let{titleOf(it)}?:"Audio",23)
   val seek=SeekBar(this).apply{max=m.duration;progress=m.currentPosition;setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(s:SeekBar?,p:Int,fromUser:Boolean){if(fromUser)m.seekTo(p)};override fun onStartTrackingTouch(s:SeekBar?){};override fun onStopTrackingTouch(s:SeekBar?) {}})};panel.addView(seek)
   button(panel,"Reproducir / pausa"){toggleAudio()}
+  val speeds=arrayOf("0.75×","1×","1.25×","1.5×","2×");val rates=floatArrayOf(.75f,1f,1.25f,1.5f,2f)
+  button(panel,"Velocidad"){android.app.AlertDialog.Builder(this).setTitle("Velocidad de reproducción").setItems(speeds){_,n->try{m.playbackParams=m.playbackParams.setSpeed(rates[n])}catch(e:Exception){toast("Velocidad no disponible")}}.show()}
+  button(panel,"Temporizador"){android.app.AlertDialog.Builder(this).setTitle("Detener reproducción").setItems(arrayOf("Desactivar","15 minutos","30 minutos","60 minutos")){_,n->refresh.removeCallbacks(sleepAction);if(n>0)refresh.postDelayed(sleepAction,longArrayOf(0,15,30,60)[n]*60000);toast(if(n==0)"Temporizador desactivado" else "Temporizador activado")}.show()}
   button(panel,"Retroceder 15 s"){m.seekTo((m.currentPosition-15000).coerceAtLeast(0));seek.progress=m.currentPosition}
   button(panel,"Avanzar 15 s"){m.seekTo((m.currentPosition+15000).coerceAtMost(m.duration));seek.progress=m.currentPosition}
   android.app.AlertDialog.Builder(this).setTitle("Reproductor").setView(panel).setPositiveButton("Cerrar",null).show()
@@ -216,7 +222,7 @@ class MainActivity : Activity() {
  private fun toast(s:String)=Toast.makeText(this,s,Toast.LENGTH_LONG).show()
  override fun onResume(){ super.onResume(); refresh.post(tick) }
  override fun onPause(){ savePlayback();refresh.removeCallbacks(tick); super.onPause() }
- override fun onDestroy(){previewPlayer?.release();previewPlayer=null;savePlayback();player?.release();player=null;super.onDestroy()}
+ override fun onDestroy(){refresh.removeCallbacks(sleepAction);previewPlayer?.release();previewPlayer=null;savePlayback();player?.release();player=null;super.onDestroy()}
  private fun showStatus(){ updateMini();savePlayback();status.text=(selected?.let { File(it,"name").readText() }?:"Selecciona un documento")+"\n"+getSharedPreferences("jobs",0).getString("status",""); if(library.tag!=libraryState()) render() }
  private fun libraryState()=docs.listFiles()?.sortedBy{it.name}?.joinToString("|"){ it.name+":"+(it.listFiles()?.filter{a->a.extension in listOf("wav","mp3")}?.sortedBy{a->a.name}?.joinToString(","){a->a.name+":"+a.lastModified()} ?: "") } ?: ""
  private fun render(){
