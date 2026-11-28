@@ -1,6 +1,5 @@
 package com.voxnatural.app
 
-import android.icu.text.RuleBasedNumberFormat
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import java.io.File
@@ -15,10 +14,7 @@ internal class ModelPhonemizer(tokens: File) {
   lines.map { it.substringBeforeLast(' ') }.toSet()
  }
  private val spanish = Locale.forLanguageTag("es-MX")
- private val spellOut = RuleBasedNumberFormat(spanish, RuleBasedNumberFormat.SPELLOUT)
  private val amountAndUnit = Regex("([0-9])\\s*(mg|ml|kg)\\b", RegexOption.IGNORE_CASE)
- private val number = Regex("[+-]?[0-9]+(?:[.,][0-9]+)*")
- private val groupedInteger = Regex("[+-]?[0-9]{1,3}(?:\\.[0-9]{3})+")
  private val units = Regex("[a-záéíóúüñ]+|\\s+|[^a-záéíóúüñ\\s]")
  private val accented = "áéíóú"
 
@@ -37,8 +33,8 @@ internal class ModelPhonemizer(tokens: File) {
    }
    match.groupValues[1] + " " + unit
   }
-  val expanded = number.replace(Normalizer.normalize(withUnits, Normalizer.Form.NFC)) {
-   spellNumber(it.value)
+  val expanded = SpanishNumbers.numericToken.replace(Normalizer.normalize(withUnits, Normalizer.Form.NFC)) {
+   SpanishNumbers.spell(it.value)
   }
   val sentences = BreakIterator.getSentenceInstance(spanish)
   sentences.setText(expanded)
@@ -64,21 +60,6 @@ internal class ModelPhonemizer(tokens: File) {
   }
   require(rendered.isNotEmpty()) { "No se encontraron fonemas compatibles" }
   return rendered.toTypedArray()
- }
-
- private fun spellNumber(value: String): String {
-  val decimal = when {
-   ',' in value -> value.replace(".", "").split(',', limit = 2)
-   groupedInteger.matches(value) -> listOf(value.replace(".", ""))
-   else -> value.split('.', limit = 2)
-  }
-  val whole = decimal[0].toLongOrNull()?.let { spellOut.format(it) }
-   ?: decimal[0].mapNotNull { it.digitToIntOrNull()?.let { digit -> spellOut.format(digit.toLong()) } }
-    .joinToString(" ")
-  val fraction = decimal.getOrNull(1)?.mapNotNull { char ->
-   char.digitToIntOrNull()?.let { spellOut.format(it.toLong()) }
-  }?.joinToString(" ")
-  return if (fraction.isNullOrEmpty()) whole else "$whole coma $fraction"
  }
 
  private fun transcribe(word: String): String {
