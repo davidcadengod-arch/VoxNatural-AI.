@@ -93,6 +93,18 @@ class MainActivity : Activity() {
  private fun playPreview(file:File){
   try{player?.pause();updateMini();previewPlayer?.release();val m=android.media.MediaPlayer();previewPlayer=m;m.setDataSource(file.absolutePath);m.prepare();m.setOnCompletionListener{it.release();if(previewPlayer===it)previewPlayer=null;file.delete()};m.start()}catch(e:Exception){previewPlayer?.release();previewPlayer=null;toast(e.message?:"Error de muestra")}
  }
+ private fun regenerate(f:File,sid:Int){
+  val parts=File(f,"neural-parts-"+sid+"-v7")
+  val index=File(parts,"chunks.json")
+  if(!index.isFile){toast("Convierte primero con esta versión para conservar los fragmentos");return}
+  try{
+   val j=org.json.JSONArray(index.readText())
+   val items=Array(j.length()){n->"${n+1}. "+j.getString(n)}
+   android.app.AlertDialog.Builder(this).setTitle("Regenerar fragmento").setItems(items){_,n->
+    startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",sid).putExtra("fragment",n))
+   }.setNegativeButton("Cancelar",null).show()
+  }catch(e:Exception){toast(e.message?:"No se pudieron abrir los fragmentos")}
+ }
  private fun dictionary(){
   val dict=Pronunciation(this);val panel=LinearLayout(this).apply{orientation=1;setPadding(dp(16),dp(8),dp(16),dp(8))}
   val word=EditText(this).apply{hint="Palabra original"};panel.addView(word)
@@ -168,6 +180,7 @@ class MainActivity : Activity() {
    if(f==null) toast("Primero selecciona un documento")
    else startForegroundService(Intent(this,ConvertService::class.java).putExtra("id",f.name).putExtra("sid",intArrayOf(28,29,53,100,-1,200,205)[voice.selectedItemPosition]))
   }
+  button(root,"Regenerar fragmento"){val f=selected;val sid=intArrayOf(28,29,53,100,-1,200,205)[voice.selectedItemPosition];if(f==null||sid<0)toast("Selecciona un libro y una voz neuronal") else regenerate(f,sid)}
   label(root,"Mi biblioteca",23)
   library=LinearLayout(this).apply { orientation=1 }; root.addView(library)
   render()

@@ -27,7 +27,7 @@ class ConvertService:Service(){
   val folder=File(filesDir,"library/"+id)
   report("Iniciando motor local")
   val sid=i?.getIntExtra("sid",-1)?:-1
-  if(sid>=0){Thread{convertNeural(folder,sid)}.start();return START_NOT_STICKY}
+  if(sid>=0){Thread{convertNeural(folder,sid,i?.getIntExtra("fragment",-1)?:-1)}.start();return START_NOT_STICKY}
   tts=TextToSpeech(this){status->
    if(status!=TextToSpeech.SUCCESS){report("Motor no disponible");stopSelf()}
    else Thread{convert(folder)}.start()
@@ -81,7 +81,7 @@ class ConvertService:Service(){
   }catch(e:Exception){report("Error: "+e.message)}
   finally{stopSelf()}
  }
- private fun convertNeural(folder:File,sid:Int){
+ private fun convertNeural(folder:File,sid:Int,fragment:Int){
   try{
    val text=Pronunciation(this).apply(File(folder,"text").readText())
    val normalized=java.text.Normalizer.normalize(text,java.text.Normalizer.Form.NFC)
@@ -123,6 +123,8 @@ class ConvertService:Service(){
    val signature=File(parts,"signature")
    val key=java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
    if(!signature.isFile || signature.readText()!=key){parts.listFiles()?.forEach{it.delete()};signature.writeText(key)}
+   File(parts,"chunks.json").writeText(org.json.JSONArray(chunks).toString())
+   if(fragment>=0){require(fragment in chunks.indices){"Fragmento inexistente"};require(chunks.indices.all{File(parts,it.toString()+".done").isFile && validNeuralWav(File(parts,it.toString()+".wav"))}){"Primero completa la conversión con la configuración actual"};File(parts,fragment.toString()+".done").delete()}
    NeuralVoice(this,sid).use{voice->
     for((index,chunk) in chunks.withIndex()){
      report((when(sid){100->"Piper: ";in 200..209->"Supertonic: ";else->"Kokoro: "})+(index+1)+" de "+chunks.size)
@@ -135,7 +137,7 @@ class ConvertService:Service(){
     }
    }
    merge(chunks.indices.map{File(parts,it.toString()+".wav")},File(folder,"audio-"+sid+".wav"),pauses)
-   parts.deleteRecursively();finishAudio(folder,sid)
+   finishAudio(folder,sid)
   }catch(e:Throwable){report("Error neuronal: "+e.message)}
   finally{stopSelf()}
  }
