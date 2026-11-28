@@ -94,19 +94,19 @@ jobs:
               audio=tts.generate(text,cfg)
           else:
               if kind=="piper":
-              cfg=s.GenerationConfig()
-              cfg.sid=0
-              cfg.speed=0.97
-              # Piper expects phoneme codepoints, with its own padding and boundary handling.
-              entries={line.split()[0]:line.split()[1:] for line in lex.read_text().splitlines()}
-              normalized=text.lower().replace("¿","").replace("¡","")
-              units=re.findall(r'[^\W\d_]+|[^\w\s]|\s+',normalized)
-              phonemes="".join("".join(entries[u]) if u in entries else (" " if u.isspace() else u) for u in units)
-              print("Piper phonemes:",repr(phonemes),flush=True)
-              cfg.phoneme_codepoints=[ord(c) for c in phonemes]
-              audio=tts.generate(normalized,cfg)
-          else:
-              audio=tts.generate(text,sid=28,speed=0.97)
+                  cfg=s.GenerationConfig()
+                  cfg.sid=0
+                  cfg.speed=0.97
+                  # Piper expects phoneme codepoints, with its own padding and boundary handling.
+                  entries={line.split()[0]:line.split()[1:] for line in lex.read_text().splitlines()}
+                  normalized=text.lower().replace("¿","").replace("¡","")
+                  units=re.findall(r'[^\W\d_]+|[^\w\s]|\s+',normalized)
+                  phonemes="".join("".join(entries[u]) if u in entries else (" " if u.isspace() else u) for u in units)
+                  print("Piper phonemes:",repr(phonemes),flush=True)
+                  cfg.phoneme_codepoints=[ord(c) for c in phonemes]
+                  audio=tts.generate(normalized,cfg)
+              else:
+                  audio=tts.generate(text,sid=28,speed=0.97)
           a=np.asarray(audio.samples)
           print("Audio diagnostics:", "samples",a.size,"rate",audio.sample_rate,"finite",bool(np.isfinite(a).all()),"peak",float(np.max(np.abs(a))) if a.size else 0,flush=True)
           assert a.size>audio.sample_rate and np.isfinite(a).all() and np.max(np.abs(a))>0.001
