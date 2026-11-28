@@ -1,0 +1,18 @@
+name: Validate PocketTTS Spanish package
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/fetch-pocket-es.sh', '.github/workflows/pocket-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify Spanish model
+        run: bash scripts/fetch-pocket-es.sh "$RUNNER_TEMP/pocket-es"
+      - name: Report verified package size
+        run: du -sh "$RUNNER_TEMP/pocket-es"
